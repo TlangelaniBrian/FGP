@@ -1,0 +1,28 @@
+# Node
+node_modules/
+.next/
+dist/
+.turbo/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ruff_cache/
+.pytest_cache/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Docker volumes
+.docker/
+
+# Supabase
+supabase/.branches
+supabase/.temp
+
+# OS
+.DS_Store
+*.swp
