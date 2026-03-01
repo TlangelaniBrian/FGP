@@ -10,7 +10,7 @@ const playfair = Playfair_Display({
 
 const dmMono = DM_Mono({
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["400", "600"],
   variable: "--font-dm-mono",
 });
 
@@ -28,10 +28,10 @@ export default function RootLayout({
     <html lang="en" className={`${playfair.variable} ${dmMono.variable}`}>
       <body className="bg-bg-base text-text-primary min-h-screen font-mono">
         {/* Topbar */}
-        <header className="bg-[#0a1120] border-b border-border sticky top-0 z-50 h-[58px] px-8 flex items-center gap-10">
+        <header className="bg-bg-header border-b border-border sticky top-0 z-50 h-[58px] px-8 flex items-center gap-10">
           {/* Logo */}
           <div className="flex items-center gap-2.5 flex-shrink-0">
-            <div className="w-7 h-7 rounded-md bg-gradient-to-br from-accent-blue to-[#1d4ed8] flex items-center justify-center text-sm">
+            <div className="w-7 h-7 rounded-md bg-gradient-to-br from-accent-blue to-accent-blue-dark flex items-center justify-center text-sm">
               🏗
             </div>
             <div>
@@ -64,7 +64,7 @@ export default function RootLayout({
 
           {/* User */}
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-blue to-purple-600 flex items-center justify-center text-xs font-bold">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center text-xs font-bold">
               TM
             </div>
             <span className="font-mono text-xs text-text-muted">

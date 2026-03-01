@@ -5,6 +5,7 @@
   --color-bg-base: #070d1a;
   --color-bg-surface: #0f172a;
   --color-bg-elevated: #0d1929;
+  --color-bg-header: #0a1120;
 
   /* Border colors */
   --color-border: #1e293b;
@@ -17,6 +18,7 @@
 
   /* Accent colors */
   --color-accent-blue: #3b82f6;
+  --color-accent-blue-dark: #1d4ed8;
   --color-accent-green: #22c55e;
   --color-accent-amber: #f59e0b;
   --color-accent-red: #ef4444;
@@ -27,7 +29,7 @@
   --font-mono: var(--font-dm-mono), ui-monospace, monospace;
 
   /* Border radius */
-  --radius-card: 12px;
+  --radius-card: 8px;
   --radius-panel: 12px;
   --radius-pill: 20px;
 }
