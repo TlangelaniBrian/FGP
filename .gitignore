@@ -3,6 +3,7 @@ node_modules/
 .next/
 dist/
 .turbo/
+package-lock.json
 
 # Python
 __pycache__/
