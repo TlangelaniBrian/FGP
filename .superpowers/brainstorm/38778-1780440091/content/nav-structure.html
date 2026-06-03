@@ -1,0 +1,101 @@
+<h2>How should the app be structured?</h2>
+<p class="subtitle">You need two main modes: Feasibility analysis (manual entry → score → PDF) and Projects (Soshanguve build tracker). How should navigation divide them?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Two top-level sections</h3>
+      <p><strong>Scout</strong> (find + analyse land) and <strong>Projects</strong> (active builds) sit as equal siblings in the sidebar. Scout covers feasibility. Projects covers the Soshanguve tracker and any future build.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">Layout preview</div>
+        <div class="mockup-body" style="display:flex;gap:0;padding:0">
+          <div style="width:140px;background:#0a1120;padding:16px;font-size:11px;font-family:monospace;color:#64748b;border-right:1px solid #1e293b;min-height:160px">
+            <div style="color:#3b82f6;margin-bottom:12px;font-weight:600">⬡ FGP</div>
+            <div style="color:#f1f5f9;margin-bottom:8px">▸ Scout</div>
+            <div style="padding-left:12px;margin-bottom:4px;color:#64748b">→ Search</div>
+            <div style="padding-left:12px;margin-bottom:12px;color:#64748b">→ Analyse</div>
+            <div style="color:#f1f5f9;margin-bottom:8px">▸ Projects</div>
+            <div style="padding-left:12px;margin-bottom:4px;color:#64748b">→ Soshanguve</div>
+            <div style="padding-left:12px;color:#64748b">→ + New</div>
+          </div>
+          <div style="flex:1;padding:16px;font-size:11px;font-family:monospace;color:#64748b">
+            Main content area
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Dashboard hub with deep-links</h3>
+      <p>A single <strong>Dashboard</strong> home page surfaces both live project status (Soshanguve) and recent feasibility analyses side-by-side. Individual sections are reachable from the dashboard only — no persistent sidebar sections.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">Layout preview</div>
+        <div class="mockup-body" style="display:flex;gap:0;padding:0">
+          <div style="width:140px;background:#0a1120;padding:16px;font-size:11px;font-family:monospace;color:#64748b;border-right:1px solid #1e293b;min-height:160px">
+            <div style="color:#3b82f6;margin-bottom:12px;font-weight:600">⬡ FGP</div>
+            <div style="color:#f1f5f9;margin-bottom:8px">Dashboard</div>
+            <div style="color:#64748b;margin-bottom:8px">Analyse Land</div>
+            <div style="color:#64748b;margin-bottom:8px">Documents</div>
+            <div style="color:#64748b;margin-bottom:8px">Settings</div>
+          </div>
+          <div style="flex:1;padding:12px;font-size:10px;font-family:monospace;color:#64748b">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div style="background:#0f172a;border:1px solid #1e293b;padding:10px;border-radius:6px">
+                <div style="color:#f59e0b;font-size:9px;margin-bottom:4px">ACTIVE PROJECT</div>
+                <div style="color:#f1f5f9">Soshanguve</div>
+                <div style="color:#64748b;font-size:9px">Month 1 of 44</div>
+              </div>
+              <div style="background:#0f172a;border:1px solid #1e293b;padding:10px;border-radius:6px">
+                <div style="color:#3b82f6;font-size:9px;margin-bottom:4px">RECENT ANALYSES</div>
+                <div style="color:#64748b;font-size:9px">No analyses yet</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Projects-first, analysis as a tool inside</h3>
+      <p>Projects are the primary object. Feasibility analysis lives <em>inside</em> a project (or as a pre-project step to evaluate land before committing). The sidebar shows projects; analysis is triggered from within.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-header">Layout preview</div>
+        <div class="mockup-body" style="display:flex;gap:0;padding:0">
+          <div style="width:140px;background:#0a1120;padding:16px;font-size:11px;font-family:monospace;color:#64748b;border-right:1px solid #1e293b;min-height:160px">
+            <div style="color:#3b82f6;margin-bottom:12px;font-weight:600">⬡ FGP</div>
+            <div style="color:#22c55e;margin-bottom:6px;font-size:10px">PROJECTS</div>
+            <div style="color:#f1f5f9;margin-bottom:6px">● Soshanguve</div>
+            <div style="color:#64748b;margin-bottom:12px">+ Evaluate land</div>
+            <div style="color:#64748b;font-size:10px">TOOLS</div>
+            <div style="color:#64748b;margin-top:4px">Documents</div>
+            <div style="color:#64748b">Settings</div>
+          </div>
+          <div style="flex:1;padding:12px;font-size:10px;font-family:monospace;color:#64748b">
+            <div style="color:#f1f5f9;margin-bottom:8px">Soshanguve Build</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+              <div style="background:#0f172a;border:1px solid #1e293b;padding:8px;border-radius:4px;text-align:center">
+                <div style="color:#f59e0b">R3,000</div>
+                <div style="font-size:9px">saved/mo</div>
+              </div>
+              <div style="background:#0f172a;border:1px solid #1e293b;padding:8px;border-radius:4px;text-align:center">
+                <div style="color:#22c55e">Month 1</div>
+                <div style="font-size:9px">of 44</div>
+              </div>
+              <div style="background:#0f172a;border:1px solid #1e293b;padding:8px;border-radius:4px;text-align:center">
+                <div style="color:#3b82f6">Transfer</div>
+                <div style="font-size:9px">In Progress</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
