@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from config import settings
+from routers.feasibility import router as feasibility_router
 
 APP_VERSION = "0.1.0"
 
@@ -10,6 +11,7 @@ app = FastAPI(
     version=APP_VERSION,
     description="First Generation Properties — geo processing worker",
 )
+app.include_router(feasibility_router)
 
 
 class HealthResponse(BaseModel):
