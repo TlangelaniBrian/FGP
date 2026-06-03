@@ -5,7 +5,8 @@
     "moduleResolution": "bundler",
     "target": "ES2022",
     "declaration": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "skipLibCheck": true
   },
-  "include": ["index.ts"]
+  "include": ["*.ts"]
 }

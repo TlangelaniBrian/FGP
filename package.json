@@ -6,10 +6,15 @@
     "dev": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
     "typecheck": "pnpm --filter web run typecheck",
-    "lint": "pnpm --filter web lint"
+    "lint": "pnpm --filter web lint",
+    "seed:zoning": "tsx scripts/seed/seed_zoning_rules.ts",
+    "seed:soshanguve": "tsx scripts/seed/seed_soshanguve.ts"
   },
   "engines": {
     "node": ">=20",
     "pnpm": ">=10"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4"
   }
 }
