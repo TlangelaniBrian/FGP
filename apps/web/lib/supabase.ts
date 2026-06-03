@@ -14,7 +14,7 @@ let client: SupabaseClient | null = null;
 
 export function createClient(): SupabaseClient {
   if (!client) {
-    client = createBrowserClient(supabaseUrl, supabaseAnonKey);
+    client = createBrowserClient(supabaseUrl!, supabaseAnonKey!);
   }
   return client;
 }

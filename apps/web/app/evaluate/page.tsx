@@ -9,10 +9,10 @@ const schema = z.object({
   address: z.string().min(1, "Required"),
   municipality: z.enum(["johannesburg", "tshwane", "ekurhuleni"]),
   zone_code: z.enum(["RES1", "RES2", "RES3", "RES4", "COM1"]),
-  size_sqm: z.coerce.number().min(100).max(1_000_000),
-  price: z.coerce.number().min(10_000).max(500_000_000),
+  size_sqm: z.number().min(100).max(1_000_000),
+  price: z.number().min(10_000).max(500_000_000),
   unit_type: z.enum(["bachelor", "1bed", "2bed"]),
-  target_units: z.coerce.number().int().min(1).max(200),
+  target_units: z.number().int().min(1).max(200),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -86,12 +86,12 @@ export default function EvaluatePage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={label}>Size (m²)</label>
-            <input type="number" {...register("size_sqm")} className={field} />
+            <input type="number" {...register("size_sqm", { valueAsNumber: true })} className={field} />
             {errors.size_sqm && <p className={err}>{errors.size_sqm.message}</p>}
           </div>
           <div>
             <label className={label}>Price (ZAR)</label>
-            <input type="number" {...register("price")} className={field} />
+            <input type="number" {...register("price", { valueAsNumber: true })} className={field} />
             {errors.price && <p className={err}>{errors.price.message}</p>}
           </div>
         </div>
@@ -106,7 +106,7 @@ export default function EvaluatePage() {
           </div>
           <div>
             <label className={label}>Target Units</label>
-            <input type="number" {...register("target_units")} className={field} />
+            <input type="number" {...register("target_units", { valueAsNumber: true })} className={field} />
             {errors.target_units && <p className={err}>{errors.target_units.message}</p>}
           </div>
         </div>
