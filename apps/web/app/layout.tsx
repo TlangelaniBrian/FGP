@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Playfair_Display, DM_Mono } from "next/font/google";
 import "./globals.css";
+import { Sidebar } from "./_components/Sidebar";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -19,61 +20,39 @@ export const metadata: Metadata = {
   description: "Property development feasibility platform for Gauteng",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  let projects: { id: number; name: string; status: string }[] = [];
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/api/projects`,
+      { cache: "no-store" }
+    );
+    if (res.ok) projects = await res.json();
+  } catch {}
+
   return (
     <html lang="en" className={`${playfair.variable} ${dmMono.variable}`}>
       <body className="bg-bg-base text-text-primary min-h-screen font-mono">
-        {/* Topbar */}
         <header className="bg-bg-header border-b border-border sticky top-0 z-50 h-[58px] px-8 flex items-center gap-10">
-          {/* Logo */}
           <div className="flex items-center gap-2.5 flex-shrink-0">
             <div className="w-7 h-7 rounded-md bg-gradient-to-br from-accent-blue to-accent-blue-dark flex items-center justify-center text-sm">
               🏗
             </div>
             <div>
-              <div className="font-heading text-sm text-text-primary font-bold leading-none">
-                First Generation
-              </div>
-              <div className="font-mono text-[9px] text-text-muted tracking-[1.5px] uppercase">
-                Properties
-              </div>
+              <div className="font-heading text-sm text-text-primary font-bold leading-none">First Generation</div>
+              <div className="font-mono text-[9px] text-text-muted tracking-[1.5px] uppercase">Properties</div>
             </div>
           </div>
-
-          {/* Nav */}
-          <nav className="flex gap-1 flex-1">
-            {[
-              { label: "Dashboard", href: "/dashboard" },
-              { label: "Scout", href: "/scout" },
-              { label: "Projects", href: "/projects" },
-              { label: "Settings", href: "/settings/scraper" },
-            ].map((item) => (
-              <a
-                key={item.label}
-                href={item.href}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-mono text-text-muted hover:text-text-primary hover:bg-border transition-colors"
-              >
-                {item.label.toUpperCase()}
-              </a>
-            ))}
-          </nav>
-
-          {/* User */}
+          <div className="flex-1" />
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center text-xs font-bold">
-              TM
-            </div>
-            <span className="font-mono text-xs text-text-muted">
-              T. Mkhabela
-            </span>
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center text-xs font-bold">TM</div>
+            <span className="font-mono text-xs text-text-muted">T. Mkhabela</span>
           </div>
         </header>
-
-        <main className="min-h-[calc(100vh-58px)]">{children}</main>
+        <div className="flex min-h-[calc(100vh-58px)]">
+          <Sidebar projects={projects} />
+          <main className="flex-1 overflow-auto">{children}</main>
+        </div>
       </body>
     </html>
   );
