@@ -35,6 +35,13 @@ export function Sidebar({ projects }: { projects: Project[] }) {
         <span className="text-text-dim">+</span>
         <span>Evaluate land</span>
       </Link>
+      <Link
+        href="/scout"
+        className={`flex items-center gap-2 px-2 py-1.5 rounded-[6px] text-xs font-mono transition-colors ${active("/scout")}`}
+      >
+        <span className="text-text-dim">⌖</span>
+        <span>Scout</span>
+      </Link>
 
       <div className="mt-auto pt-4 border-t border-border flex flex-col gap-1">
         <p className="text-[9px] font-mono text-text-dim tracking-widest uppercase px-2 mb-1">Tools</p>

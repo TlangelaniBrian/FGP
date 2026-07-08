@@ -1,6 +1,6 @@
 import {
   pgTable, bigserial, text, numeric, integer, boolean,
-  timestamp, date, serial,
+  timestamp, date, serial, jsonb,
 } from "drizzle-orm/pg-core";
 
 export const projects = pgTable("projects", {
@@ -65,6 +65,7 @@ export const projectCheckins = pgTable("project_checkins", {
   weekOf: date("week_of").notNull(),
   attorneyStatus: text("attorney_status"),
   savingsConfirmed: boolean("savings_confirmed"),
+  depositZar: numeric("deposit_zar"),
   supplierProgress: text("supplier_progress"),
   openIssues: text("open_issues"),
   actionsNextCall: text("actions_next_call"),
@@ -144,6 +145,17 @@ export const listings = pgTable("listings", {
   status: text("status").default("new"),
   feasibilityScore: integer("feasibility_score"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Tariffs — DB-driven so build rates, rents, bulk contributions, transfer-duty
+// brackets and fee config can be updated annually without a code deploy.
+// One row per (tariff_year, category); `data` holds the category payload as JSON.
+export const tariffs = pgTable("tariffs", {
+  id: serial("id").primaryKey(),
+  tariffYear: integer("tariff_year").notNull(),
+  category: text("category").notNull(), // build_rates | unit_sizes | market_rents | bulk_contributions | transfer_duty_brackets | fees
+  data: jsonb("data").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

@@ -1,27 +1,19 @@
 from __future__ import annotations  # enables X | Y syntax on Python 3.9
-import time
-from collections import defaultdict
 from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from services.calculations import calculate_feasibility_score
+from services.rate_limit import is_rate_limited
+from services.tariffs import load_tariffs
 
 router = APIRouter(prefix="/analyze", tags=["feasibility"])
 
-# In-memory rate limiter: max 10 requests per 60 seconds per IP
-_request_log: dict[str, list[float]] = defaultdict(list)
-_RATE_LIMIT = 10
-_RATE_WINDOW = 60.0
-
 
 def rate_limit(request: Request) -> None:
+    # Redis-backed limiter (shared across replicas), with in-memory fallback.
     ip = request.client.host if request.client else "unknown"
-    now = time.time()
-    window_start = now - _RATE_WINDOW
-    _request_log[ip] = [t for t in _request_log[ip] if t > window_start]
-    if len(_request_log[ip]) >= _RATE_LIMIT:
+    if is_rate_limited(f"feasibility:{ip}"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded: 10 requests/minute")
-    _request_log[ip].append(now)
 
 
 class ZoneRulesInput(BaseModel):
@@ -86,6 +78,9 @@ async def analyze_feasibility(
     if body.zone_rules:
         rules = body.zone_rules.model_dump(exclude_none=True)
 
+    # DB-backed tariffs for the requested year, falling back to constants.
+    tariffs = load_tariffs(body.tariff_year)
+
     return calculate_feasibility_score(
         land_price=body.price,
         size_sqm=body.size_sqm,
@@ -94,4 +89,5 @@ async def analyze_feasibility(
         municipality=body.municipality,
         zone_rules=rules,
         tariff_year=body.tariff_year,
+        tariffs=tariffs,
     )

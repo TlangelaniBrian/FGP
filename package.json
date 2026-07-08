@@ -8,6 +8,7 @@
     "typecheck": "pnpm --filter web run typecheck",
     "lint": "pnpm --filter web lint",
     "seed:zoning": "tsx scripts/seed/seed_zoning_rules.ts",
+    "seed:tariffs": "tsx scripts/seed/seed_tariffs.ts",
     "seed:soshanguve": "tsx scripts/seed/seed_soshanguve.ts"
   },
   "engines": {

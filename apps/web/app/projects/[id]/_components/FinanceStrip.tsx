@@ -1,8 +1,8 @@
 type Milestone = { targetDate: string; milestone: string; status: string; isMajor: boolean };
 type Project = { monthlySavingZar: string | null; phase1TargetZar: string | null };
 
-export function FinanceStrip({ project, milestones }: { project: Project; milestones: Milestone[] }) {
-  const saved = 3000; // TODO: compute from checkins cash flow in Phase 2
+export function FinanceStrip({ project, milestones, savedToDate = 0 }: { project: Project; milestones: Milestone[]; savedToDate?: number }) {
+  const saved = savedToDate; // summed from weekly check-in deposits
   const nextMajor = milestones.find(m => m.isMajor && m.status === "PENDING");
   const breakGround = milestones.find(m => m.milestone.includes("BREAK GROUND"));
 

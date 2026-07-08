@@ -1,57 +1,57 @@
 from __future__ import annotations
+
 from typing import Any
 
-BUILD_RATES_2026: dict[str, int] = {
-    "bachelor": 13_500,
-    "1bed": 14_200,
-    "2bed": 15_000,
-    "luxury": 18_500,
-}
+from services.tariffs import (
+    BUILD_RATES_2026,
+    BULK_RATES_2026,
+    MARKET_RENT_2026,
+    TRANSFER_DUTY_BRACKETS_2026,
+    UNIT_SIZES,
+    Tariffs,
+    default_tariffs,
+)
 
-UNIT_SIZES: dict[str, int] = {
-    "bachelor": 35,
-    "1bed": 55,
-    "2bed": 85,
-}
-
-MARKET_RENT_2026: dict[str, dict[str, int]] = {
-    "bachelor": {"default": 4_500},
-    "1bed":     {"default": 6_500},
-    "2bed":     {"default": 9_500},
-}
-
-BULK_RATES_2026: dict[str, dict[str, tuple[int, int]]] = {
-    "johannesburg":  {"bachelor": (45_000, 65_000), "1bed": (50_000, 65_000), "2bed": (55_000, 65_000)},
-    "tshwane":       {"bachelor": (38_000, 55_000), "1bed": (42_000, 55_000), "2bed": (46_000, 55_000)},
-    "ekurhuleni":    {"bachelor": (40_000, 58_000), "1bed": (44_000, 58_000), "2bed": (48_000, 58_000)},
-}
-
-# SARS 2026 transfer duty brackets: (upper_threshold, rate, cumulative_base)
-# Base is the duty already accumulated at the bottom of this bracket.
-TRANSFER_DUTY_BRACKETS_2026 = [
-    (1_100_000,  0.00, 0),
-    (1_512_500,  0.03, 0),
-    (2_117_500,  0.06, 12_375),
-    (2_722_500,  0.08, 49_125),
-    (12_100_000, 0.11, 97_125),
-    (float("inf"), 0.13, 1_128_600),
+# Re-exported for backwards compatibility with existing imports/tests. The
+# authoritative definitions now live in services/tariffs.py (DB-backed at
+# runtime, these constants are the fallback).
+__all__ = [
+    "BUILD_RATES_2026",
+    "UNIT_SIZES",
+    "MARKET_RENT_2026",
+    "BULK_RATES_2026",
+    "TRANSFER_DUTY_BRACKETS_2026",
+    "calculate_transfer_duty",
+    "calculate_bulk_contributions",
+    "calculate_feasibility_score",
 ]
 
 
-def calculate_transfer_duty(price: float, year: int = 2026) -> float:
-    if price <= 1_100_000:
+def calculate_transfer_duty(
+    price: float,
+    brackets: list[tuple[float, float, float]] | None = None,
+) -> float:
+    """SARS stepped transfer duty. `brackets` is (upper, rate, cumulative_base)."""
+    table = brackets if brackets is not None else TRANSFER_DUTY_BRACKETS_2026
+    if price <= table[0][0]:
         return 0.0
-    for i, (threshold, rate, base) in enumerate(TRANSFER_DUTY_BRACKETS_2026[1:], 1):
-        prev_threshold = TRANSFER_DUTY_BRACKETS_2026[i - 1][0]
+    for i in range(1, len(table)):
+        threshold, rate, base = table[i]
+        prev_threshold = table[i - 1][0]
         if price <= threshold:
             return base + (price - prev_threshold) * rate
     return 0.0
 
 
 def calculate_bulk_contributions(
-    municipality: str, unit_type: str, units: int, year: int = 2026
+    municipality: str,
+    unit_type: str,
+    units: int,
+    year: int = 2026,
+    bulk_rates: dict[str, dict[str, tuple[float, float]]] | None = None,
 ) -> float:
-    rates = BULK_RATES_2026.get(municipality, BULK_RATES_2026["johannesburg"])
+    rates_all = bulk_rates if bulk_rates is not None else BULK_RATES_2026
+    rates = rates_all.get(municipality, rates_all["johannesburg"])
     lo, hi = rates.get(unit_type, rates["bachelor"])
     mid = (lo + hi) / 2
     return mid * units
@@ -65,14 +65,19 @@ def calculate_feasibility_score(
     municipality: str,
     zone_rules: dict[str, Any],
     tariff_year: int = 2026,
+    tariffs: Tariffs | None = None,
 ) -> dict[str, Any]:
     if size_sqm > 1_000_000:
         raise ValueError("size_sqm exceeds maximum allowed value of 1,000,000")
     if land_price > 500_000_000:
         raise ValueError("price exceeds maximum allowed value of 500,000,000")
 
-    unit_sqm = UNIT_SIZES.get(unit_type, 35)
-    build_rate = BUILD_RATES_2026.get(unit_type, 13_500)
+    # When no tariff bundle is supplied (e.g. unit tests) fall back to the
+    # baseline constants — identical numbers to the pre-DB implementation.
+    t = tariffs if tariffs is not None else default_tariffs(tariff_year)
+
+    unit_sqm = t.unit_sizes.get(unit_type, 35)
+    build_rate = t.build_rates.get(unit_type, 13_500)
 
     coverage = float(zone_rules.get("coverage_pct") or 40) / 100
     far = float(zone_rules.get("far") or 0.5)
@@ -92,12 +97,14 @@ def calculate_feasibility_score(
 
     total_build_sqm = unit_sqm * actual_units
     cost_build = total_build_sqm * build_rate
-    cost_prof_fees = cost_build * 0.12
-    cost_transfer = calculate_transfer_duty(land_price, tariff_year)
-    cost_bulk = calculate_bulk_contributions(municipality, unit_type, actual_units, tariff_year)
+    cost_prof_fees = cost_build * t.professional_fee_pct
+    cost_transfer = calculate_transfer_duty(land_price, t.transfer_duty_brackets)
+    cost_bulk = calculate_bulk_contributions(
+        municipality, unit_type, actual_units, t.year, t.bulk_contributions
+    )
     cost_total = land_price + cost_build + cost_prof_fees + cost_transfer + cost_bulk
 
-    rent = MARKET_RENT_2026.get(unit_type, {}).get("default", 4_500)
+    rent = t.market_rents.get(unit_type, 4_500)
     gross_monthly = rent * actual_units
     gross_annual = gross_monthly * 12
 
@@ -127,7 +134,8 @@ def calculate_feasibility_score(
         "yield_gross_pct": round(yield_gross, 2),
         "yield_at_85_occ_pct": round(yield_85, 2),
         "viability_notes": (
-            "Viable at 85% occupancy" if viable
+            "Viable at 85% occupancy"
+            if viable
             else f"Yield {yield_85:.1f}% below 10% threshold at 85% occupancy"
         ),
         "dolomite_risk": "UNKNOWN",

@@ -20,7 +20,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const data = await getProject(id);
   if (!data) notFound();
 
-  const { project, budget, contacts, decisions, milestones, latestCheckin } = data;
+  const { project, budget, contacts, decisions, milestones, latestCheckin, savedToDate } = data;
 
   return (
     <div className="p-8 flex flex-col gap-8 max-w-4xl">
@@ -38,7 +38,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </div>
 
       <ThisWeek projectId={project.id} latestCheckin={latestCheckin} />
-      <FinanceStrip project={project} milestones={milestones} />
+      <FinanceStrip project={project} milestones={milestones} savedToDate={savedToDate ?? 0} />
       <MilestonesTimeline milestones={milestones} />
       <BudgetTable items={budget} />
       <ContactsTable contacts={contacts} />

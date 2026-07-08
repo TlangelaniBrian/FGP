@@ -1,9 +1,30 @@
 "use client";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { useFeasibilityStore } from "@/lib/feasibility-store";
+
+// Pull a human-readable message out of whatever the API returned. The
+// feasibility route may return a string error (worker text), a Zod flatten
+// object (422), or a worker-unreachable message (502).
+function extractError(payload: unknown, status: number): string {
+  if (payload && typeof payload === "object" && "error" in payload) {
+    const e = (payload as { error: unknown }).error;
+    if (typeof e === "string") return e;
+    if (e && typeof e === "object") {
+      // Zod flatten: surface the first field/form error we can find.
+      const flat = e as { formErrors?: string[]; fieldErrors?: Record<string, string[]> };
+      const first =
+        flat.formErrors?.[0] ??
+        Object.values(flat.fieldErrors ?? {}).flat()[0];
+      if (first) return first;
+      return JSON.stringify(e);
+    }
+  }
+  return `Request failed (HTTP ${status}).`;
+}
 
 const schema = z.object({
   address: z.string().min(1, "Required"),
@@ -20,6 +41,7 @@ type FormValues = z.infer<typeof schema>;
 export default function EvaluatePage() {
   const router = useRouter();
   const setResult = useFeasibilityStore((s) => s.setResult);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -27,12 +49,30 @@ export default function EvaluatePage() {
   });
 
   async function onSubmit(values: FormValues) {
-    const res = await fetch("/api/feasibility", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
-    if (!res.ok) return;
+    setSubmitError(null);
+    let res: Response;
+    try {
+      res = await fetch("/api/feasibility", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+    } catch {
+      setSubmitError("Could not reach the server. Check your connection and try again.");
+      return;
+    }
+
+    if (!res.ok) {
+      let payload: unknown = null;
+      try {
+        payload = await res.json();
+      } catch {
+        /* non-JSON error body */
+      }
+      setSubmitError(extractError(payload, res.status));
+      return;
+    }
+
     const data = await res.json();
     setResult(
       {
@@ -110,6 +150,14 @@ export default function EvaluatePage() {
             {errors.target_units && <p className={err}>{errors.target_units.message}</p>}
           </div>
         </div>
+        {submitError && (
+          <div
+            role="alert"
+            className="border border-accent-red/40 bg-accent-red/10 text-accent-red rounded-card px-3 py-2 text-xs font-mono"
+          >
+            {submitError}
+          </div>
+        )}
         <button
           type="submit"
           disabled={isSubmitting}

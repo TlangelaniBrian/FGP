@@ -7,6 +7,7 @@ const schema = z.object({
   weekOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   attorneyStatus: z.string().max(1000).optional(),
   savingsConfirmed: z.boolean().optional(),
+  depositZar: z.number().nonnegative().max(100_000_000).optional(),
   supplierProgress: z.string().max(1000).optional(),
   openIssues: z.string().max(2000).optional(),
   actionsNextCall: z.string().max(2000).optional(),
@@ -53,6 +54,17 @@ export function CheckInModal({ projectId, onClose }: { projectId: number; onClos
           <div className="flex items-center gap-3">
             <input type="checkbox" {...register("savingsConfirmed")} id="savings" className="accent-accent-blue" />
             <label htmlFor="savings" className="font-mono text-xs text-text-primary">Savings confirmed (both deposits made)</label>
+          </div>
+          <div>
+            <label className={label}>Deposit this week (ZAR)</label>
+            <input
+              type="number"
+              min={0}
+              step={100}
+              {...register("depositZar", { setValueAs: (v) => (v === "" || v == null ? undefined : Number(v)) })}
+              className={field}
+              placeholder="e.g. 3000"
+            />
           </div>
           <div>
             <label className={label}>Supplier / quote progress</label>
