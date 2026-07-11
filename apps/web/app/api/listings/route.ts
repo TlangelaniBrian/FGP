@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { z } from "zod";
 import { db, listings } from "@fgp/database";
 import { getAuthenticatedActor, requireSessionCapability } from "@/lib/portal-auth";
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const params = new URL(req.url).searchParams;
   const query = params.get("q")?.trim();
   const status = params.get("status");
-  const filters = [sql`${listings.userId} = ${actor.userId} OR ${listings.userId} IS NULL`];
+  const filters = [eq(listings.userId, actor.userId)];
   if (query) filters.push(or(ilike(listings.address, `%${query}%`), ilike(listings.suburb, `%${query}%`))!);
   if (status) filters.push(eq(listings.status, status));
   const rows = await db.select().from(listings).where(and(...filters)).orderBy(desc(listings.feasibilityScore), desc(listings.createdAt)).limit(100);

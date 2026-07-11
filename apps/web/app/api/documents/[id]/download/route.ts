@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, complianceDocuments } from "@fgp/database";
 import { getAuthenticatedActor } from "@/lib/portal-auth";
 import { createAdminSupabase } from "@/lib/supabase-admin";
@@ -9,7 +9,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!actor) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const id = Number((await params).id);
   if (!Number.isInteger(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
-  const [document] = await db.select().from(complianceDocuments).where(eq(complianceDocuments.id, id));
+  const [document] = await db.select().from(complianceDocuments).where(and(eq(complianceDocuments.id, id), eq(complianceDocuments.userId, actor.userId)));
   if (!document) return NextResponse.json({ error: "document not found" }, { status: 404 });
   const workerUrl = process.env.WORKER_URL ?? "http://127.0.0.1:8000";
   const generated = await fetch(`${workerUrl}/forms/generate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doc_type: document.docType, context: document.prefilledData ?? { municipality: document.municipality } }) });

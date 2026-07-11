@@ -187,6 +187,7 @@ export const milestones = pgTable("milestones", {
 
 export const complianceDocuments = pgTable("compliance_documents", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: text("user_id"),
   reportId: bigserial("report_id", { mode: "number" }),
   listingId: bigserial("listing_id", { mode: "number" }),
   docType: text("doc_type").notNull(),

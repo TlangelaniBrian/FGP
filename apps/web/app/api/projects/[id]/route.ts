@@ -17,7 +17,7 @@ export async function GET(
   const projectId = parseInt(id, 10);
   if (isNaN(projectId)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
 
-  const [project] = await db.select().from(projects).where(sql`${projects.id} = ${projectId} AND (${projects.userId} = ${actor.userId} OR ${projects.userId} IS NULL)`);
+  const [project] = await db.select().from(projects).where(sql`${projects.id} = ${projectId} AND ${projects.userId} = ${actor.userId}`);
   if (!project) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const [budget, contacts, decisions, projectMilestones, checkins, savedAgg] = await Promise.all([
@@ -61,7 +61,7 @@ export async function PATCH(
     monthlySavingZar: body.monthlySavingZar == null ? undefined : String(body.monthlySavingZar),
     phase1TargetZar: body.phase1TargetZar == null ? undefined : String(body.phase1TargetZar),
     updatedAt: new Date(),
-  }).where(sql`${projects.id} = ${projectId} AND (${projects.userId} = ${guard.actor!.userId} OR ${projects.userId} IS NULL)`).returning();
+  }).where(sql`${projects.id} = ${projectId} AND ${projects.userId} = ${guard.actor!.userId}`).returning();
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
   await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "project_updated", title: `Project updated: ${row.name}`, detail: row.status ?? undefined, entityType: "project", entityId: row.id });
   return NextResponse.json(row);

@@ -46,13 +46,13 @@ ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_events ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS projects_authenticated_owner ON projects;
-CREATE POLICY projects_authenticated_owner ON projects FOR ALL TO authenticated USING (user_id = auth.uid() OR user_id IS NULL) WITH CHECK (user_id = auth.uid());
+CREATE POLICY projects_authenticated_owner ON projects FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 DROP POLICY IF EXISTS listings_authenticated_owner ON listings;
-CREATE POLICY listings_authenticated_owner ON listings FOR ALL TO authenticated USING (user_id = auth.uid() OR user_id IS NULL) WITH CHECK (user_id = auth.uid());
+CREATE POLICY listings_authenticated_owner ON listings FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 DROP POLICY IF EXISTS reports_authenticated_owner ON feasibility_reports;
 CREATE POLICY reports_authenticated_owner ON feasibility_reports FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 DROP POLICY IF EXISTS documents_authenticated_owner ON compliance_documents;
-CREATE POLICY documents_authenticated_owner ON compliance_documents FOR ALL TO authenticated USING (user_id = auth.uid() OR user_id IS NULL) WITH CHECK (user_id = auth.uid());
+CREATE POLICY documents_authenticated_owner ON compliance_documents FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 DROP POLICY IF EXISTS capital_authenticated_members ON capital_contributions;
 CREATE POLICY capital_authenticated_members ON capital_contributions FOR ALL TO authenticated USING (true) WITH CHECK (true);
 DROP POLICY IF EXISTS goals_authenticated_members ON capital_goal_proposals;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, projects } from "@fgp/database";
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getAuthenticatedActor, requireSessionCapability } from "@/lib/portal-auth";
 import { recordActivity } from "@/lib/activity";
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const rows = await db
     .select()
     .from(projects)
-    .where(sql`${projects.userId} = ${actor.userId} OR ${projects.userId} IS NULL`)
+    .where(eq(projects.userId, actor.userId))
     .orderBy(desc(projects.createdAt))
     .limit(limit)
     .offset(offset);
