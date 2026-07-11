@@ -5,6 +5,7 @@ from config import settings
 from routers.feasibility import router as feasibility_router
 from routers.parcel import router as parcel_router
 from routers.forms import router as forms_router
+from routers.scraper import router as scraper_router
 
 APP_VERSION = "0.1.0"
 
@@ -16,6 +17,7 @@ app = FastAPI(
 app.include_router(feasibility_router)
 app.include_router(parcel_router)
 app.include_router(forms_router)
+app.include_router(scraper_router)
 
 
 class HealthResponse(BaseModel):
