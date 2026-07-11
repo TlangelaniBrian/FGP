@@ -27,10 +27,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await db.update(scrapeJobs).set({ status: "failed", errorMessage: String(payload.detail ?? "scraper failed"), completedAt: new Date() }).where(eq(scrapeJobs.id, id));
     return NextResponse.json({ error: payload.detail ?? "scraper failed" }, { status: 502 });
   }
-  const thresholdRow = await db.select().from(portalSettings).where(eq(portalSettings.key, "scoreThreshold"));
+  const [thresholdRow, autoAnalyzeRow] = await Promise.all([
+    db.select().from(portalSettings).where(eq(portalSettings.key, "scoreThreshold")),
+    db.select().from(portalSettings).where(eq(portalSettings.key, "autoAnalyze")),
+  ]);
   const threshold = Number(thresholdRow[0]?.value ?? 75);
+  const autoAnalyze = autoAnalyzeRow[0]?.value !== false;
   const incoming = Array.isArray(payload.listings) ? payload.listings as Array<Record<string, unknown>> : [];
-  const rows = incoming.length ? await db.insert(listings).values(incoming.filter((item) => typeof item.address === "string").map((item) => ({ userId: guard.actor!.userId, source: job.source, address: String(item.address), sizeSqm: item.size_sqm == null ? undefined : String(item.size_sqm), price: item.price == null ? undefined : String(item.price), sourceUrl: typeof item.source_url === "string" ? item.source_url : undefined, description: typeof item.description === "string" ? item.description : undefined, feasibilityScore: null, status: threshold <= 0 ? "analyzed" : "new" }))).returning() : [];
+  type SpatialAnalysis = { parcel_id?: number | null; zone_code?: string | null; dolomite_risk?: string | null; score_composite?: number | null };
+  const candidates = incoming.filter((item) => typeof item.address === "string");
+  const enriched = await Promise.all(candidates.map(async (item) => {
+    const lat = Number(item.latitude);
+    const lng = Number(item.longitude);
+    let analysis: SpatialAnalysis | null = null;
+    if (autoAnalyze && Number.isFinite(lat) && Number.isFinite(lng)) {
+      try {
+        const spatial = await fetch(`${workerUrl}/analyze/parcel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lat, lng }) });
+        if (spatial.ok) analysis = await spatial.json() as SpatialAnalysis;
+      } catch { /* Keep the listing in analyzing state when spatial data is unavailable. */ }
+    }
+    const score = analysis?.score_composite ?? null;
+    return { userId: guard.actor!.userId, source: job.source, address: String(item.address), sizeSqm: item.size_sqm == null ? undefined : String(item.size_sqm), price: item.price == null ? undefined : String(item.price), sourceUrl: typeof item.source_url === "string" ? item.source_url : undefined, description: typeof item.description === "string" ? item.description : undefined, parcelId: analysis?.parcel_id ?? undefined, zoneCode: analysis?.zone_code ?? undefined, dolomiteRisk: analysis?.dolomite_risk ?? undefined, feasibilityScore: score, status: !autoAnalyze ? "new" : score != null && score >= threshold ? "analyzed" : "analyzing" };
+  }));
+  const rows = enriched.length ? await db.insert(listings).values(enriched).returning() : [];
   const [updated] = await db.update(scrapeJobs).set({ status: "complete", listingsFound: incoming.length, listingsNew: rows.length, completedAt: new Date() }).where(eq(scrapeJobs.id, id)).returning();
   await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "scrape_completed", title: `Scrape completed: ${job.source}`, detail: `${rows.length} listings ingested`, entityType: "scrape_job", entityId: id });
   return NextResponse.json({ job: updated, listings: rows });

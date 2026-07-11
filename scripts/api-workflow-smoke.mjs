@@ -96,6 +96,11 @@ try {
   assert.equal(result.response.status, 201, JSON.stringify(result.payload));
   result = await api("/api/scrape/jobs", token, { method: "POST", body: JSON.stringify({ source: "property24", location: "Midrand" }) });
   assert.equal(result.response.status, 201, JSON.stringify(result.payload));
+  const scrapeJobId = result.payload.id;
+  result = await api(`/api/scrape/jobs/${scrapeJobId}/ingest`, token, { method: "POST", body: JSON.stringify({ listings: [{ address: "Workflow scored lead", municipality: "johannesburg", sizeSqm: 600, price: 900000, feasibilityScore: 84 }, { address: "Workflow pending lead", municipality: "johannesburg", sizeSqm: 600, price: 900000 }] }) });
+  assert.equal(result.response.status, 201, JSON.stringify(result.payload));
+  assert.equal(result.payload.listings[0].status, "analyzed");
+  assert.equal(result.payload.listings[1].status, "analyzing");
 
   result = await api("/api/team", token, { method: "DELETE", body: JSON.stringify({ id: secondaryMemberId }) });
   assert.equal(result.response.status, 200, JSON.stringify(result.payload));

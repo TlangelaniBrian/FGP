@@ -16,9 +16,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!job) return NextResponse.json({ error: "job not found" }, { status: 404 });
   const parsed = ingestSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });
-  const thresholdRow = await db.select().from(portalSettings).where(eq(portalSettings.key, "scoreThreshold"));
+  const [thresholdRow, autoAnalyzeRow] = await Promise.all([
+    db.select().from(portalSettings).where(eq(portalSettings.key, "scoreThreshold")),
+    db.select().from(portalSettings).where(eq(portalSettings.key, "autoAnalyze")),
+  ]);
   const threshold = Number(thresholdRow[0]?.value ?? 75);
-  const rows = parsed.data.listings.length ? await db.insert(listings).values(parsed.data.listings.map((item) => ({ userId: guard.actor!.userId, source: job.source, address: item.address, suburb: item.suburb, municipality: item.municipality, sizeSqm: item.sizeSqm == null ? undefined : String(item.sizeSqm), price: item.price == null ? undefined : String(item.price), sourceUrl: item.sourceUrl, description: item.description, feasibilityScore: item.feasibilityScore, status: item.feasibilityScore != null && item.feasibilityScore >= threshold ? "analyzed" : "new" }))).returning() : [];
+  const autoAnalyze = autoAnalyzeRow[0]?.value !== false;
+  const rows = parsed.data.listings.length ? await db.insert(listings).values(parsed.data.listings.map((item) => ({ userId: guard.actor!.userId, source: job.source, address: item.address, suburb: item.suburb, municipality: item.municipality, sizeSqm: item.sizeSqm == null ? undefined : String(item.sizeSqm), price: item.price == null ? undefined : String(item.price), sourceUrl: item.sourceUrl, description: item.description, feasibilityScore: item.feasibilityScore, status: !autoAnalyze ? "new" : item.feasibilityScore != null && item.feasibilityScore >= threshold ? "analyzed" : "analyzing" }))).returning() : [];
   const [updated] = await db.update(scrapeJobs).set({ status: "complete", listingsFound: parsed.data.listings.length, listingsNew: rows.length, completedAt: new Date() }).where(eq(scrapeJobs.id, jobId)).returning();
   await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "scrape_completed", title: `Scrape completed: ${job.source}`, detail: `${rows.length} listings ingested`, entityType: "scrape_job", entityId: jobId });
   return NextResponse.json({ job: updated, listings: rows }, { status: 201 });

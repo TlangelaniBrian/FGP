@@ -79,7 +79,12 @@ def normalize_jsonld(html: str, source: str) -> list[dict[str, Any]]:
             size = item.get("floorSize")
             if isinstance(size, dict):
                 size = size.get("value")
-            results.append({"source": source, "address": address or item.get("name"), "price": offers.get("price") or item.get("price"), "size_sqm": size, "source_url": item.get("url"), "description": item.get("description")})
+            geo = item.get("geo") if isinstance(item.get("geo"), dict) else {}
+            result = {"source": source, "address": address or item.get("name"), "price": offers.get("price") or item.get("price"), "size_sqm": size, "source_url": item.get("url"), "description": item.get("description")}
+            if geo.get("latitude") is not None and geo.get("longitude") is not None:
+                result["latitude"] = geo["latitude"]
+                result["longitude"] = geo["longitude"]
+            results.append(result)
     return [item for item in results if item.get("address")]
 
 
