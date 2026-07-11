@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { can, readPortalPreference, team, type Role } from "@/lib/portal-state";
+import { actorHeaders } from "@/lib/portal-client";
 
 const CATEGORIES = [
   { key: "build_rates", label: "Build rates", hint: "R/m² by unit type" },
@@ -62,7 +63,7 @@ export default function TariffsAdminPage() {
     try {
       const res = await fetch("/api/tariffs", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: actorHeaders(),
         body: JSON.stringify({ year, category, data }),
       });
       if (!res.ok) {

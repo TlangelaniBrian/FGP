@@ -169,3 +169,57 @@ export const milestones = pgTable("milestones", {
   isMajor: boolean("is_major").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const complianceDocuments = pgTable("compliance_documents", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  reportId: bigserial("report_id", { mode: "number" }),
+  listingId: bigserial("listing_id", { mode: "number" }),
+  docType: text("doc_type").notNull(),
+  municipality: text("municipality"),
+  status: text("status").default("draft"),
+  prefilledData: jsonb("prefilled_data"),
+  pdfUrl: text("pdf_url"),
+  submittedAt: timestamp("submitted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const capitalContributions = pgTable("capital_contributions", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  memberName: text("member_name").notNull(),
+  memberRole: text("member_role").notNull(),
+  amount: numeric("amount").notNull(),
+  contributionDate: date("contribution_date").notNull(),
+  note: text("note"),
+  status: text("status").default("posted"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const capitalGoalProposals = pgTable("capital_goal_proposals", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  proposedBy: text("proposed_by").notNull(),
+  proposedByRole: text("proposed_by_role").notNull(),
+  newAmount: numeric("new_amount").notNull(),
+  approvals: jsonb("approvals").notNull().default([]),
+  status: text("status").default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const capitalCorrectionProposals = pgTable("capital_correction_proposals", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  contributionId: bigserial("contribution_id", { mode: "number" }).notNull(),
+  proposedBy: text("proposed_by").notNull(),
+  proposedByRole: text("proposed_by_role").notNull(),
+  action: text("action").notNull(),
+  proposedAmount: numeric("proposed_amount"),
+  proposedNote: text("proposed_note"),
+  approvals: jsonb("approvals").notNull().default([]),
+  status: text("status").default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const portalSettings = pgTable("portal_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});

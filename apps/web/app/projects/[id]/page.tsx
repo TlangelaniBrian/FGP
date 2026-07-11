@@ -5,6 +5,7 @@ import { MilestonesTimeline } from "./_components/MilestonesTimeline";
 import { BudgetTable } from "./_components/BudgetTable";
 import { ContactsTable } from "./_components/ContactsTable";
 import { DecisionLog } from "./_components/DecisionLog";
+import { ProjectActions } from "./_components/ProjectActions";
 
 async function getProject(id: string) {
   const res = await fetch(
@@ -32,9 +33,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <p className="text-text-muted font-mono text-xs mt-1">ERF {project.erfNumber} · {project.township}</p>
           )}
         </div>
-        <span className="text-[10px] font-mono border border-accent-amber text-accent-amber px-3 py-1 rounded-[20px] uppercase tracking-widest">
-          {project.status}
-        </span>
+        <div className="split"><span className="tag tag-amber">{project.status}</span><ProjectActions project={project} /></div>
       </div>
 
       <ThisWeek projectId={project.id} latestCheckin={latestCheckin} />

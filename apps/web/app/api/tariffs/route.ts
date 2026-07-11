@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db, tariffs } from "@fgp/database";
 import { and, eq } from "drizzle-orm";
+import { requireCapability } from "@/lib/portal-auth";
 
 const DEFAULT_YEAR = 2026;
 
@@ -47,6 +48,8 @@ const putSchema = z.object({
 
 // PUT /api/tariffs → upsert one category for a year.
 export async function PUT(req: NextRequest) {
+  const guard = requireCapability(req, "tariff");
+  if (guard.response) return guard.response;
   const body = await req.json();
   const parsed = putSchema.safeParse(body);
   if (!parsed.success) {

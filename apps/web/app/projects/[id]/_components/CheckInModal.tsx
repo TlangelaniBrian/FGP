@@ -2,6 +2,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { actorHeaders } from "@/lib/portal-client";
 
 const schema = z.object({
   weekOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -26,7 +27,7 @@ export function CheckInModal({ projectId, onClose }: { projectId: number; onClos
   async function onSubmit(values: FormValues) {
     await fetch(`/api/projects/${projectId}/checkins`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: actorHeaders(),
       body: JSON.stringify(values),
     });
     onClose();
