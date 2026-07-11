@@ -4,6 +4,7 @@
 - [x] Rebuild shared portal shell and visual system.
 - [x] Redesign Dashboard, Scout, Evaluate, and Cost Oracle.
 - [x] Redesign Projects, Capital fund, Tariffs, and Settings.
+- [x] Add Parcel Detail and Zoning/Compliance routes from the design handoff.
 - [x] Run typecheck, lint, and production build.
 
 ## Review

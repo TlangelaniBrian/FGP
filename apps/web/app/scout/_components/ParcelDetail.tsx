@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import type { ParcelAnalysis } from "@/lib/parcel";
 
 const DOLOMITE_COLORS: Record<string, string> = {
@@ -132,6 +133,7 @@ export function ParcelDetail({ data }: { data: ParcelAnalysis }) {
           </div>
         </div>
       )}
+      <div className="split" style={{ paddingTop: 3 }}><Link className="button button-secondary" href="/evaluate">Evaluate this parcel →</Link><Link className="button button-quiet" href="/scout/218">Open parcel detail</Link></div>
     </div>
   );
 }
