@@ -80,6 +80,15 @@ try {
 
   result = await api(`/api/projects/${projectId}/checkins`, token, { method: "POST", body: JSON.stringify({ weekOf: "2026-07-13", savingsConfirmed: true, depositZar: 25000, supplierProgress: "Smoke test" }) });
   assert.equal(result.response.status, 201, JSON.stringify(result.payload));
+  for (const detail of [
+    { action: "budget", category: "general", item: "Workflow survey", totalCost: 5000 },
+    { action: "contact", role: "Architect", name: "Workflow Architect" },
+    { action: "decision", decidedAt: "2026-07-13", decision: "Proceed to survey", rationale: "Workflow smoke" },
+    { action: "milestone", targetDate: "2026-08", milestone: "Workflow survey complete", owner: "Workflow Smoke" },
+  ]) {
+    result = await api(`/api/projects/${projectId}/details`, token, { method: "POST", body: JSON.stringify(detail) });
+    assert.equal(result.response.status, 201, JSON.stringify(result.payload));
+  }
   result = await api(`/api/projects/${projectId}`, token, { method: "PATCH", body: JSON.stringify({ status: "compliance", notes: "Smoke test update" }) });
   assert.equal(result.response.status, 200, JSON.stringify(result.payload));
 

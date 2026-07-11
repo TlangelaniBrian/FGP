@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 
 type Project = {
   id: number;
@@ -11,9 +12,12 @@ type Project = {
 };
 
 async function getProjects(): Promise<Project[]> {
+  const requestHeaders = await headers();
+  const cookie = requestHeaders.get("cookie") ?? "";
+  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? `http://${requestHeaders.get("host") ?? "localhost:3000"}`;
   const res = await fetch(
-    `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/api/projects`,
-    { cache: "no-store" }
+    `${origin}/api/projects`,
+    { cache: "no-store", headers: { cookie } }
   );
   if (!res.ok) return [];
   return res.json();
