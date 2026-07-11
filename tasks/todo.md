@@ -14,6 +14,7 @@
 - [x] Run typecheck, lint, and production build.
 - [x] Replace dashboard mock metrics, activity, and scout signal with persisted data.
 - [x] Add production preflight and checked-in Supabase migration command.
+- [x] Add positive authenticated workflow smoke coverage with cleanup.
 - [ ] Complete authenticated production deployment and verify the live URL.
 
 ## Review
