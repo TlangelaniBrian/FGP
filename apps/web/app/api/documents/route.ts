@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { db, complianceDocuments } from "@fgp/database";
-import { requireCapability } from "@/lib/portal-auth";
+import { getAuthenticatedActor, requireSessionCapability } from "@/lib/portal-auth";
+import { recordActivity } from "@/lib/activity";
 
 export async function GET(req: NextRequest) {
+  if (!await getAuthenticatedActor()) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const params = new URL(req.url).searchParams;
   const listingId = Number(params.get("listingId"));
   const reportId = Number(params.get("reportId"));
@@ -16,10 +18,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = requireCapability(req, "project");
+  const guard = await requireSessionCapability("project");
   if (guard.response) return guard.response;
   const body = await req.json() as { reportId?: number; listingId?: number; municipality?: string; forms?: string[]; prefilledData?: Record<string, unknown> };
   if (!body.forms?.length || (!body.reportId && !body.listingId)) return NextResponse.json({ error: "forms and reportId or listingId are required" }, { status: 422 });
   const rows = await db.insert(complianceDocuments).values(body.forms.map((docType) => ({ reportId: body.reportId, listingId: body.listingId, municipality: body.municipality, docType, status: "ready", prefilledData: body.prefilledData ?? {} }))).returning();
+  await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "documents_generated", title: "Compliance package generated", detail: `${rows.length} documents`, entityType: "listing", entityId: body.listingId ?? body.reportId });
   return NextResponse.json(rows, { status: 201 });
 }

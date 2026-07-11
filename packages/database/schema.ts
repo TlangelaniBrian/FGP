@@ -130,6 +130,7 @@ export const feasibilityReports = pgTable("feasibility_reports", {
 export const listings = pgTable("listings", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   source: text("source").notNull(),
+  userId: text("user_id"),
   sourceId: text("source_id"),
   sourceUrl: text("source_url"),
   address: text("address"),
@@ -146,6 +147,20 @@ export const listings = pgTable("listings", {
   feasibilityScore: integer("feasibility_score"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const scrapeJobs = pgTable("scrape_jobs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: text("user_id"),
+  source: text("source").notNull(),
+  searchParams: jsonb("search_params"),
+  status: text("status").default("queued"),
+  listingsFound: integer("listings_found").default(0),
+  listingsNew: integer("listings_new").default(0),
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Tariffs — DB-driven so build rates, rents, bulk contributions, transfer-duty
@@ -222,4 +237,28 @@ export const portalSettings = pgTable("portal_settings", {
   value: jsonb("value").notNull(),
   updatedBy: text("updated_by"),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const teamMembers = pgTable("team_members", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: text("user_id").unique(),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  role: text("role").notNull().default("Viewer"),
+  status: text("status").notNull().default("invited"),
+  invitedBy: text("invited_by"),
+  invitedAt: timestamp("invited_at").defaultNow(),
+  acceptedAt: timestamp("accepted_at"),
+});
+
+export const activityEvents = pgTable("activity_events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  actorUserId: text("actor_user_id"),
+  actorName: text("actor_name"),
+  eventType: text("event_type").notNull(),
+  title: text("title").notNull(),
+  detail: text("detail"),
+  entityType: text("entity_type"),
+  entityId: text("entity_id"),
+  createdAt: timestamp("created_at").defaultNow(),
 });

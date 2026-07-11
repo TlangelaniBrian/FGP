@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db, projectCheckins } from "@fgp/database";
-import { requireCapability } from "@/lib/portal-auth";
+import { requireSessionCapability } from "@/lib/portal-auth";
 
 const schema = z.object({
   weekOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -18,7 +18,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = requireCapability(req, "project");
+  const guard = await requireSessionCapability("project");
   if (guard.response) return guard.response;
   const { id } = await params;
   const projectId = parseInt(id, 10);

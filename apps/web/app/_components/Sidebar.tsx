@@ -24,6 +24,7 @@ export function Sidebar({ projects }: { projects: Project[] }) {
       {nav.slice(4, 6).map((item) => <Link key={item.href} href={item.href} className={isActive(item.href) ? "nav-item is-active" : "nav-item"}><span className="nav-icon">{item.icon}</span><span>{item.label}</span></Link>)}
       <span className="nav-section">Admin</span>
       {nav.slice(6).map((item) => <Link key={item.href} href={item.href} className={isActive(item.href) ? "nav-item is-active" : "nav-item"}><span className="nav-icon">{item.icon}</span><span>{item.label}</span></Link>)}
+      <Link href="/settings/scraper" className={isActive("/settings/scraper") ? "nav-item is-active" : "nav-item"}><span className="nav-icon">↻</span><span>Scraper jobs</span></Link>
     </nav>
     <div className="sidebar-projects"><span className="nav-section">Active projects</span>{projects.slice(0, 3).map((project) => <Link key={project.id} href={`/projects/${project.id}`} className="project-link"><i className={`status-dot ${project.status}`} />{project.name}</Link>)}</div>
     <div className="sidebar-footer"><span className="capitec-mark">C</span><span>Built on Capitec DS</span></div>

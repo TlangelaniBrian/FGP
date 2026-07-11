@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, projects } from "@fgp/database";
 import { desc, sql } from "drizzle-orm";
 import { z } from "zod";
-import { requireCapability } from "@/lib/portal-auth";
+import { getAuthenticatedActor, requireSessionCapability } from "@/lib/portal-auth";
+import { recordActivity } from "@/lib/activity";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
 export async function GET(req: NextRequest) {
+  const actor = await getAuthenticatedActor();
+  if (!actor) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const { searchParams } = new URL(req.url);
 
   const rawLimit = parseInt(searchParams.get("limit") ?? "", 10);
@@ -18,6 +21,7 @@ export async function GET(req: NextRequest) {
   const rows = await db
     .select()
     .from(projects)
+    .where(sql`${projects.userId} = ${actor.userId} OR ${projects.userId} IS NULL`)
     .orderBy(desc(projects.createdAt))
     .limit(limit)
     .offset(offset);
@@ -45,7 +49,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const guard = requireCapability(req, "project");
+  const guard = await requireSessionCapability("project");
   if (guard.response) return guard.response;
   const parsed = createSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });
@@ -58,7 +62,8 @@ export async function POST(req: NextRequest) {
     notes: data.notes,
     phase1TargetZar: data.phase1TargetZar == null ? undefined : String(data.phase1TargetZar),
     monthlySavingZar: data.monthlySavingZar == null ? undefined : String(data.monthlySavingZar),
-    userId: guard.actor!.name,
+    userId: guard.actor!.userId,
   }).returning();
+  await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "project_created", title: `Project created: ${row.name}`, entityType: "project", entityId: row.id });
   return NextResponse.json(row, { status: 201 });
 }

@@ -7,6 +7,9 @@
 - [x] Add Parcel Detail and Zoning/Compliance routes from the design handoff.
 - [x] Add durable capital, settings, compliance-document, and project mutation APIs.
 - [x] Wire UI mutations to the API and enforce role checks in handlers.
+- [x] Replace demo role headers with Supabase session middleware and RLS policies.
+- [x] Add persisted team/activity APIs and scraper/listing ingestion routes.
+- [x] Add worker PDF generation with storage-backed download route and fallback renderer.
 - [x] Run typecheck, lint, and production build.
 
 ## Review
@@ -22,6 +25,7 @@ updates, and handler-level role checks.
 
 Verification: `supabase migration up --local`, live capital API read/write,
 Viewer 403 checks for capital/settings/tariffs, `pnpm --filter web typecheck`,
-`pnpm --filter web lint`, and `pnpm --filter web build` all pass. Next.js still
+`pnpm --filter web lint`, `pnpm --filter web build`, and 26 worker tests all
+pass. Next.js still
 emits a workspace-root warning because the machine has multiple lockfiles; it
 does not fail the build.

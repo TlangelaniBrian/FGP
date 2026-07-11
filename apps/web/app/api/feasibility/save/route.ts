@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db, listings, feasibilityReports } from "@fgp/database";
+import { requireSessionCapability } from "@/lib/portal-auth";
 
 const schema = z.object({
   address: z.string().min(1).max(500),
@@ -33,6 +34,8 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const guard = await requireSessionCapability("record");
+  if (guard.response) return guard.response;
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
@@ -43,6 +46,7 @@ export async function POST(req: NextRequest) {
 
   const [listing] = await db.insert(listings).values({
     source: "manual",
+    userId: guard.actor!.userId,
     address: d.address,
     municipality: d.municipality,
     sizeSqm: String(d.sizeSqm),
@@ -55,6 +59,7 @@ export async function POST(req: NextRequest) {
 
   const [report] = await db.insert(feasibilityReports).values({
     listingId: listing.id,
+    userId: guard.actor!.userId,
     unitType: d.unitType,
     targetUnits: d.targetUnits,
     buildRatePerSqm: "13500",

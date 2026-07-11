@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db, complianceDocuments } from "@fgp/database";
-import { requireCapability } from "@/lib/portal-auth";
+import { requireSessionCapability } from "@/lib/portal-auth";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = requireCapability(req, "project");
+  const guard = await requireSessionCapability("project");
   if (guard.response) return guard.response;
   const id = Number((await params).id);
   if (!Number.isInteger(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
