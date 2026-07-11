@@ -3,14 +3,14 @@ import { db, portalSettings } from "@fgp/database";
 import { getAuthenticatedActor, requireSessionCapability } from "@/lib/portal-auth";
 import { recordActivity } from "@/lib/activity";
 
-export async function GET() {
-  if (!await getAuthenticatedActor()) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+export async function GET(req: NextRequest) {
+  if (!await getAuthenticatedActor(req)) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const rows = await db.select().from(portalSettings);
   return NextResponse.json(Object.fromEntries(rows.map((row) => [row.key, row.value])));
 }
 
 export async function PUT(req: NextRequest) {
-  const guard = await requireSessionCapability("settings");
+  const guard = await requireSessionCapability("settings", req);
   if (guard.response) return guard.response;
   const body = await req.json() as Record<string, unknown>;
   const entries = await Promise.all(Object.entries(body).map(([key, value]) => db.insert(portalSettings).values({ key, value, updatedBy: guard.actor!.name }).onConflictDoUpdate({ target: portalSettings.key, set: { value, updatedBy: guard.actor!.name, updatedAt: new Date() } }).returning()));

@@ -5,7 +5,7 @@ import { getAuthenticatedActor } from "@/lib/portal-auth";
 import { createAdminSupabase } from "@/lib/supabase-admin";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const actor = await getAuthenticatedActor();
+  const actor = await getAuthenticatedActor(_req);
   if (!actor) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const id = Number((await params).id);
   if (!Number.isInteger(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });

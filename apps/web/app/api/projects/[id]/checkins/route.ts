@@ -18,7 +18,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireSessionCapability("project");
+  const guard = await requireSessionCapability("project", req);
   if (guard.response) return guard.response;
   const { id } = await params;
   const projectId = parseInt(id, 10);

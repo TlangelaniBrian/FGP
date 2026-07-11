@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
+    "test:api": "node scripts/api-smoke.mjs",
     "typecheck": "pnpm --filter web run typecheck",
     "lint": "pnpm --filter web lint",
     "seed:zoning": "tsx scripts/seed/seed_zoning_rules.ts",

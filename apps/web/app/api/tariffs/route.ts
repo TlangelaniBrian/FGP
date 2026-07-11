@@ -24,7 +24,7 @@ const parseYear = (raw: string | null) => {
 
 // GET /api/tariffs?year=2026 → { year, tariffs: { category: data, ... } }
 export async function GET(req: NextRequest) {
-  if (!await getAuthenticatedActor()) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  if (!await getAuthenticatedActor(req)) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const { searchParams } = new URL(req.url);
   const year = parseYear(searchParams.get("year"));
 
@@ -49,7 +49,7 @@ const putSchema = z.object({
 
 // PUT /api/tariffs → upsert one category for a year.
 export async function PUT(req: NextRequest) {
-  const guard = await requireSessionCapability("tariff");
+  const guard = await requireSessionCapability("tariff", req);
   if (guard.response) return guard.response;
   const body = await req.json();
   const parsed = putSchema.safeParse(body);

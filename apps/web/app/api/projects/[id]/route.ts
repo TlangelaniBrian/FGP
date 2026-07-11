@@ -11,7 +11,7 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const actor = await getAuthenticatedActor();
+  const actor = await getAuthenticatedActor(_req);
   if (!actor) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const { id } = await params;
   const projectId = parseInt(id, 10);
@@ -47,7 +47,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireSessionCapability("project");
+  const guard = await requireSessionCapability("project", req);
   if (guard.response) return guard.response;
   const projectId = parseInt((await params).id, 10);
   if (isNaN(projectId)) return NextResponse.json({ error: "invalid id" }, { status: 400 });

@@ -4,7 +4,7 @@ import { db, complianceDocuments } from "@fgp/database";
 import { requireSessionCapability } from "@/lib/portal-auth";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requireSessionCapability("project");
+  const guard = await requireSessionCapability("project", req);
   if (guard.response) return guard.response;
   const id = Number((await params).id);
   if (!Number.isInteger(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });

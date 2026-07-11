@@ -8,7 +8,7 @@ import { recordActivity } from "@/lib/activity";
 const ingestSchema = z.object({ listings: z.array(z.object({ address: z.string().min(2), suburb: z.string().optional(), municipality: z.enum(["johannesburg", "tshwane", "ekurhuleni"]).optional(), sizeSqm: z.number().positive().optional(), price: z.number().positive().optional(), sourceUrl: z.string().url().optional(), description: z.string().max(5000).optional(), feasibilityScore: z.number().int().min(0).max(100).optional() })).max(500) });
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requireSessionCapability("record");
+  const guard = await requireSessionCapability("record", req);
   if (guard.response) return guard.response;
   const jobId = Number((await params).id);
   if (!Number.isInteger(jobId)) return NextResponse.json({ error: "invalid id" }, { status: 400 });

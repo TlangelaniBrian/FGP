@@ -5,13 +5,13 @@ import { getAuthenticatedActor, requireSessionCapability } from "@/lib/portal-au
 import { recordActivity } from "@/lib/activity";
 import { createAdminSupabase } from "@/lib/supabase-admin";
 
-export async function GET() {
-  if (!await getAuthenticatedActor()) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+export async function GET(req: NextRequest) {
+  if (!await getAuthenticatedActor(req)) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   return NextResponse.json(await db.select().from(teamMembers).orderBy(desc(teamMembers.invitedAt)));
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireSessionCapability("team");
+  const guard = await requireSessionCapability("team", req);
   if (guard.response) return guard.response;
   const body = await req.json() as { email?: string; name?: string; role?: string };
   if (!body.email || !body.name || !["Owner", "Chairperson", "Treasurer", "Analyst", "Viewer"].includes(body.role ?? "")) return NextResponse.json({ error: "email, name, and valid role are required" }, { status: 422 });
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const guard = await requireSessionCapability("team");
+  const guard = await requireSessionCapability("team", req);
   if (guard.response) return guard.response;
   const body = await req.json() as { id?: number; role?: string; status?: string };
   if (!body.id || (body.role && !["Owner", "Chairperson", "Treasurer", "Analyst", "Viewer"].includes(body.role)) || (body.status && !["invited", "active", "suspended"].includes(body.status))) return NextResponse.json({ error: "invalid team update" }, { status: 422 });

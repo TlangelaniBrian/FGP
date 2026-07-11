@@ -34,7 +34,7 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const guard = await requireSessionCapability("record");
+  const guard = await requireSessionCapability("record", req);
   if (guard.response) return guard.response;
   const body = await req.json();
   const parsed = schema.safeParse(body);

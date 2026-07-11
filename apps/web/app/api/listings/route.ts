@@ -6,7 +6,7 @@ import { getAuthenticatedActor, requireSessionCapability } from "@/lib/portal-au
 import { recordActivity } from "@/lib/activity";
 
 export async function GET(req: NextRequest) {
-  const actor = await getAuthenticatedActor();
+  const actor = await getAuthenticatedActor(req);
   if (!actor) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const params = new URL(req.url).searchParams;
   const query = params.get("q")?.trim();
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 const listingSchema = z.object({ address: z.string().min(2).max(500), municipality: z.enum(["johannesburg", "tshwane", "ekurhuleni"]), sizeSqm: z.number().min(100), price: z.number().positive(), sourceUrl: z.string().url().optional(), description: z.string().max(5000).optional() });
 
 export async function POST(req: NextRequest) {
-  const guard = await requireSessionCapability("record");
+  const guard = await requireSessionCapability("record", req);
   if (guard.response) return guard.response;
   const parsed = listingSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });

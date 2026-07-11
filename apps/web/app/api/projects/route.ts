@@ -9,7 +9,7 @@ const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
 export async function GET(req: NextRequest) {
-  const actor = await getAuthenticatedActor();
+  const actor = await getAuthenticatedActor(req);
   if (!actor) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const { searchParams } = new URL(req.url);
 
@@ -49,7 +49,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const guard = await requireSessionCapability("project");
+  const guard = await requireSessionCapability("project", req);
   if (guard.response) return guard.response;
   const parsed = createSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });
