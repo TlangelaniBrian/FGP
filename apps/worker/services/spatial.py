@@ -37,7 +37,7 @@ def _best_score(amenities: list[dict[str, Any]], types: set[str]) -> int | None:
     ]
     if not dists:
         return None
-    return proximity_score(min(dists))
+    return proximity_score(float(min(dists)))
 
 
 def score_amenities(amenities: list[dict[str, Any]]) -> dict[str, int | None]:

@@ -40,7 +40,7 @@ def fetch_tariff_rows(year: int) -> dict[str, Any]:
 _POINT = "ST_SetSRID(ST_MakePoint(%(lng)s, %(lat)s), 4326)"
 
 _PARCEL_SQL = f"""
-    SELECT erf_number, township, municipality, size_sqm,
+    SELECT id, erf_number, township, municipality, size_sqm,
            ST_AsGeoJSON(boundary) AS boundary_geojson
     FROM parcels
     WHERE ST_Contains(boundary::geometry, {_POINT})

@@ -1,6 +1,6 @@
 import {
   pgTable, bigserial, text, numeric, integer, boolean,
-  timestamp, date, serial, jsonb,
+  timestamp, date, serial, jsonb, bigint,
 } from "drizzle-orm/pg-core";
 
 export const projects = pgTable("projects", {
@@ -142,6 +142,7 @@ export const listings = pgTable("listings", {
   listingType: text("listing_type").default("vacant_land"),
   description: text("description"),
   zoneCode: text("zone_code"),
+  parcelId: bigint("parcel_id", { mode: "number" }),
   dolomiteRisk: text("dolomite_risk"),
   status: text("status").default("new"),
   feasibilityScore: integer("feasibility_score"),

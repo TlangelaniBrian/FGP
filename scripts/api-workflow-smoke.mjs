@@ -63,6 +63,10 @@ try {
   listingId = result.payload.listingId;
   reportId = result.payload.reportId;
 
+  result = await api(`/api/listings/${listingId}/link-parcel`, token, { method: "POST", body: JSON.stringify({ lat: -25.976, lng: 28.13 }) });
+  assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+  assert.equal(result.payload.parcelId, 2);
+
   result = await api("/api/projects", token, { method: "POST", body: JSON.stringify({ listingId, reportId, name: "Workflow Smoke Project", phase1TargetZar: 8645760, monthlySavingZar: 25000 }) });
   assert.equal(result.response.status, 201, JSON.stringify(result.payload));
   projectId = result.payload.id;

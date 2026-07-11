@@ -35,6 +35,7 @@ class AmenityOut(BaseModel):
 
 class ParcelAnalysisResponse(BaseModel):
     found: bool
+    parcel_id: int | None = None
     erf_number: str | None = None
     township: str | None = None
     municipality: str | None = None
@@ -90,6 +91,7 @@ async def analyze_parcel(
 
     return {
         "found": True,
+        "parcel_id": parcel.get("id") if parcel else None,
         "erf_number": parcel.get("erf_number") if parcel else None,
         "township": parcel.get("township") if parcel else None,
         "municipality": (parcel or zone or {}).get("municipality"),
