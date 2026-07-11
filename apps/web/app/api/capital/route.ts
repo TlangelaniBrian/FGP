@@ -2,25 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, desc, eq } from "drizzle-orm";
 import {
   db, capitalContributions, capitalGoalProposals, capitalCorrectionProposals, portalSettings,
+  teamMembers,
 } from "@fgp/database";
 import { getAuthenticatedActor, requireSessionCapability } from "@/lib/portal-auth";
 import { recordActivity } from "@/lib/activity";
 
-const activeGoverningMembers = ["Tlangelani Mkhabela", "Thabo Nkosi", "Lerato Dube"];
+async function getGoverningMembers() {
+  const rows = await db.select({ name: teamMembers.name, role: teamMembers.role, status: teamMembers.status }).from(teamMembers);
+  return rows.filter((member) => ["Owner", "Chairperson", "Treasurer"].includes(member.role) && !["suspended", "removed"].includes(member.status));
+}
 
 export async function GET(req: NextRequest) {
   if (!await getAuthenticatedActor(req)) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  const [contributions, goalSetting, goalProposal, corrections] = await Promise.all([
+  const [contributions, goalSetting, goalProposal, corrections, governingMembers] = await Promise.all([
     db.select().from(capitalContributions).orderBy(desc(capitalContributions.contributionDate), desc(capitalContributions.createdAt)),
     db.select().from(portalSettings).where(eq(portalSettings.key, "capital_goal")),
     db.select().from(capitalGoalProposals).where(eq(capitalGoalProposals.status, "pending")).orderBy(desc(capitalGoalProposals.createdAt)).limit(1),
     db.select().from(capitalCorrectionProposals).where(eq(capitalCorrectionProposals.status, "pending")).orderBy(desc(capitalCorrectionProposals.createdAt)),
+    getGoverningMembers(),
   ]);
   return NextResponse.json({
     contributions,
     goal: Number(goalSetting[0]?.value ?? 760000),
     goalProposal: goalProposal[0] ?? null,
     corrections,
+    governance: { requiredMembers: governingMembers.map((member) => member.name), members: governingMembers },
   });
 }
 
@@ -51,11 +57,13 @@ export async function POST(req: NextRequest) {
     const approvals = Array.isArray(proposal.approvals) ? [...proposal.approvals as string[]] : [];
     if (approvals.includes(guard.actor!.name)) return NextResponse.json({ error: "actor has already co-signed" }, { status: 409 });
     approvals.push(guard.actor!.name);
-    const approved = activeGoverningMembers.every((member) => approvals.includes(member));
+    const governingMembers = await getGoverningMembers();
+    const requiredMembers = governingMembers.length ? governingMembers.map((member) => member.name) : [guard.actor!.name];
+    const approved = requiredMembers.every((member) => approvals.includes(member));
     await db.update(capitalGoalProposals).set({ approvals, status: approved ? "approved" : "pending" }).where(eq(capitalGoalProposals.id, proposal.id));
     if (approved) await db.insert(portalSettings).values({ key: "capital_goal", value: Number(proposal.newAmount), updatedBy: guard.actor!.name }).onConflictDoUpdate({ target: portalSettings.key, set: { value: Number(proposal.newAmount), updatedBy: guard.actor!.name, updatedAt: new Date() } });
     await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "goal_cosign", title: approved ? "Capital goal approved" : "Capital goal co-signed", detail: `Proposal #${proposal.id}`, entityType: "capital_goal_proposal", entityId: proposal.id });
-    return NextResponse.json({ approved, approvals });
+    return NextResponse.json({ approved, approvals, requiredMembers });
   }
   if (body.action === "correction") {
     const guard = await requireSessionCapability("proposal", req);
