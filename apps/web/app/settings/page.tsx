@@ -1,33 +1,13 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 
 export default function SettingsPage() {
-  const items = [
-    {
-      label: "Tariffs",
-      desc: "Build rates, unit sizes, market rents, bulk contributions, SARS transfer-duty brackets and professional fees. Updated annually without a code deploy.",
-      href: "/settings/tariffs",
-    },
-  ];
-
-  return (
-    <div className="max-w-3xl mx-auto p-8 flex flex-col gap-6">
-      <div>
-        <p className="text-xs font-mono text-text-muted tracking-widest uppercase mb-2">Settings</p>
-        <h1 className="font-heading text-2xl font-bold text-text-primary">Configuration</h1>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        {items.map((it) => (
-          <Link
-            key={it.href}
-            href={it.href}
-            className="bg-bg-surface border border-border rounded-card p-5 hover:border-accent-blue transition-colors"
-          >
-            <div className="text-text-primary font-mono text-sm font-semibold">{it.label}</div>
-            <div className="text-text-muted font-mono text-xs mt-1 leading-relaxed">{it.desc}</div>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
+  const [saved, setSaved] = useState(false);
+  const [autoAnalyze, setAutoAnalyze] = useState(true);
+  const [threshold, setThreshold] = useState(75);
+  const [whatsapp, setWhatsapp] = useState(true);
+  const [weekly, setWeekly] = useState(true);
+  return <div className="portal-page"><div className="portal-page-head"><div><p className="eyebrow">Admin · Workspace preferences</p><h1 className="page-title">Settings</h1><p className="page-subtitle">Control alerts, data sources, and how new land leads enter the pipeline.</p></div><button className="button button-primary" onClick={() => setSaved(true)}>Save settings</button></div>{saved && <div className="card" style={{ padding: "12px 16px", marginBottom: 16, color: "#16653d", background: "#effaf3", borderColor: "#b9e6c9", fontSize: 12, fontWeight: 800 }}>Settings saved for this workspace.</div>}<div className="grid-2"><div className="stack"><section className="card card-pad"><div className="split"><div><span className="card-kicker">Lead automation</span><h2 className="card-title" style={{ marginTop: 6 }}>Scoring preferences</h2></div><span className="tag tag-green">Active</span></div><div className="list-row"><span><strong>Auto-analyse new listings</strong><small>Run spatial checks as soon as a lead is imported.</small></span><button className={`toggle ${autoAnalyze ? "on" : ""}`} aria-label="Toggle auto-analyse" onClick={() => setAutoAnalyze(!autoAnalyze)}><i /></button></div><div style={{ padding: "14px 0" }}><div className="split"><span><strong style={{ fontSize: 13 }}>Minimum score threshold</strong><small className="muted" style={{ display: "block", marginTop: 3, fontSize: 11 }}>Only alert the team for high-signal opportunities.</small></span><strong style={{ color: "#0033a0" }}>{threshold}</strong></div><input type="range" min="50" max="95" value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} style={{ width: "100%", marginTop: 14, accentColor: "#2f70ef" }} /></div></section><section className="card card-pad"><span className="card-kicker">Notifications</span><h2 className="card-title" style={{ marginTop: 6 }}>Stay in the loop</h2><div className="list-row"><span><strong>WhatsApp alerts</strong><small>High-score land and fund activity</small></span><button className={`toggle ${whatsapp ? "on" : ""}`} onClick={() => setWhatsapp(!whatsapp)} aria-label="Toggle WhatsApp alerts"><i /></button></div><div className="list-row"><span><strong>Weekly digest</strong><small>Every Monday at 08:00 SAST</small></span><button className={`toggle ${weekly ? "on" : ""}`} onClick={() => setWeekly(!weekly)} aria-label="Toggle weekly digest"><i /></button></div></section></div><div className="stack"><section className="card card-pad"><div className="split"><div><span className="card-kicker">Data sources</span><h2 className="card-title" style={{ marginTop: 6 }}>Scraper network</h2></div><span className="tag tag-blue">3 active</span></div>{["Property24", "Private Property", "GCRO open data"].map((source) => <div className="list-row" key={source}><span><strong>{source}</strong><small>Last sync · today, 06:00</small></span><span className="tag tag-green">Connected</span></div>)}</section><section className="card card-pad"><div className="split"><div><span className="card-kicker">Workspace</span><h2 className="card-title" style={{ marginTop: 6 }}>Team and permissions</h2></div><span className="tag tag-blue">4 members</span></div><p className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>Roles control who can record contributions, update tariffs, edit projects, and co-sign governance changes.</p><Link href="/settings/tariffs" className="button button-quiet" style={{ marginTop: 8 }}>Open tariff administration →</Link></section></div></div></div>;
 }

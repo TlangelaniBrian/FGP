@@ -88,11 +88,11 @@ export default function ScoutPage() {
     "bg-bg-surface border border-border rounded-card px-3 py-2 text-text-primary font-mono text-sm w-full focus:outline-none focus:border-accent-blue";
 
   return (
-    <div className="p-8 flex flex-col gap-6">
+    <div className="portal-page">
       <div>
-        <p className="text-xs font-mono text-text-muted tracking-widest uppercase mb-2">Scout</p>
-        <h1 className="font-heading text-2xl font-bold text-text-primary">Spatial Analysis</h1>
-        <p className="text-text-muted font-mono text-sm mt-1">
+        <p className="eyebrow">Scout · Gauteng lead discovery</p>
+        <h1 className="page-title">Find the next viable parcel</h1>
+        <p className="page-subtitle">
           Click the map or enter a coordinate to resolve zoning, dolomite risk, building envelope and amenity scores.
         </p>
       </div>

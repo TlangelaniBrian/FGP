@@ -1,57 +1,31 @@
 "use client";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 type Project = { id: number; name: string; status: string };
+const nav = [
+  { href: "/", label: "Dashboard", icon: "▦" }, { href: "/scout", label: "Scout", icon: "⌖", badge: "5" },
+  { href: "/evaluate", label: "Evaluate land", icon: "＋" }, { href: "/evaluate/result", label: "Cost oracle", icon: "↗" },
+  { href: "/projects", label: "Projects", icon: "▤" }, { href: "/capital", label: "Capital fund", icon: "◉" },
+  { href: "/settings/tariffs", label: "Tariffs", icon: "▥" }, { href: "/settings", label: "Settings", icon: "⚙" },
+];
 
 export function Sidebar({ projects }: { projects: Project[] }) {
   const path = usePathname();
-  const active = (href: string) =>
-    path === href || path.startsWith(href + "/")
-      ? "text-text-primary bg-border"
-      : "text-text-muted hover:text-text-primary hover:bg-border/50";
-
-  return (
-    <aside className="w-52 flex-shrink-0 bg-bg-header border-r border-border min-h-[calc(100vh-58px)] px-3 py-4 flex flex-col gap-1">
-      <p className="text-[9px] font-mono text-text-dim tracking-widest uppercase px-2 mb-2">Projects</p>
-      {projects.map((p) => (
-        <Link
-          key={p.id}
-          href={`/projects/${p.id}`}
-          className={`flex items-center gap-2 px-2 py-1.5 rounded-[6px] text-xs font-mono transition-colors ${active(`/projects/${p.id}`)}`}
-        >
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-            p.status === "planning" ? "bg-accent-amber"
-            : p.status === "construction" ? "bg-accent-green"
-            : "bg-text-dim"
-          }`} />
-          {p.name}
-        </Link>
-      ))}
-      <Link
-        href="/evaluate"
-        className={`flex items-center gap-2 px-2 py-1.5 rounded-[6px] text-xs font-mono transition-colors ${active("/evaluate")}`}
-      >
-        <span className="text-text-dim">+</span>
-        <span>Evaluate land</span>
-      </Link>
-      <Link
-        href="/scout"
-        className={`flex items-center gap-2 px-2 py-1.5 rounded-[6px] text-xs font-mono transition-colors ${active("/scout")}`}
-      >
-        <span className="text-text-dim">⌖</span>
-        <span>Scout</span>
-      </Link>
-
-      <div className="mt-auto pt-4 border-t border-border flex flex-col gap-1">
-        <p className="text-[9px] font-mono text-text-dim tracking-widest uppercase px-2 mb-1">Tools</p>
-        <Link
-          href="/settings"
-          className={`px-2 py-1.5 rounded-[6px] text-xs font-mono transition-colors ${active("/settings")}`}
-        >
-          Settings
-        </Link>
-      </div>
-    </aside>
-  );
+  const isActive = (href: string) => href === "/" ? path === "/" : path === href || path.startsWith(href + "/");
+  return <aside className="portal-sidebar">
+    <div className="brand-lockup"><div className="brand-mark">⌂</div><div><strong>First Generation</strong><span>PROPERTIES</span></div></div>
+    <nav className="portal-nav" aria-label="Main navigation">
+      {nav.slice(0, 2).map((item) => <Link key={item.href} href={item.href} className={isActive(item.href) ? "nav-item is-active" : "nav-item"}><span className="nav-icon">{item.icon}</span><span>{item.label}</span>{item.badge && <span className="nav-badge">{item.badge}</span>}</Link>)}
+      <span className="nav-section">Analysis</span>
+      {nav.slice(2, 4).map((item) => <Link key={item.href} href={item.href} className={isActive(item.href) ? "nav-item is-active" : "nav-item"}><span className="nav-icon">{item.icon}</span><span>{item.label}</span></Link>)}
+      <span className="nav-section">Workspace</span>
+      {nav.slice(4, 6).map((item) => <Link key={item.href} href={item.href} className={isActive(item.href) ? "nav-item is-active" : "nav-item"}><span className="nav-icon">{item.icon}</span><span>{item.label}</span></Link>)}
+      <span className="nav-section">Admin</span>
+      {nav.slice(6).map((item) => <Link key={item.href} href={item.href} className={isActive(item.href) ? "nav-item is-active" : "nav-item"}><span className="nav-icon">{item.icon}</span><span>{item.label}</span></Link>)}
+    </nav>
+    <div className="sidebar-projects"><span className="nav-section">Active projects</span>{projects.slice(0, 3).map((project) => <Link key={project.id} href={`/projects/${project.id}`} className="project-link"><i className={`status-dot ${project.status}`} />{project.name}</Link>)}</div>
+    <div className="sidebar-footer"><span className="capitec-mark">C</span><span>Built on Capitec DS</span></div>
+  </aside>;
 }

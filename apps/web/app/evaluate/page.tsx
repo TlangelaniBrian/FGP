@@ -98,9 +98,10 @@ export default function EvaluatePage() {
   const err = "text-accent-red text-xs mt-1";
 
   return (
-    <div className="max-w-xl mx-auto p-8">
-      <p className="text-xs font-mono text-text-muted tracking-widest uppercase mb-2">New Analysis</p>
-      <h1 className="font-heading text-2xl font-bold text-text-primary mb-6">Evaluate Land</h1>
+    <div className="portal-page" style={{ maxWidth: 860 }}>
+      <p className="eyebrow">Analysis · Cost oracle</p>
+      <h1 className="page-title" style={{ marginBottom: 8 }}>Evaluate land</h1>
+      <p className="page-subtitle" style={{ marginBottom: 24 }}>Turn a raw listing into a go/no-go investment decision with build cost, yield, and zoning context.</p>
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
         <div>
           <label className={label}>Address</label>

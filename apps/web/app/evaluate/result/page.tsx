@@ -48,11 +48,11 @@ export default function EvaluateResultPage() {
   const statVal = "font-mono text-sm font-semibold text-text-primary";
 
   return (
-    <div className="max-w-2xl mx-auto p-8 flex flex-col gap-6">
+    <div className="portal-page" style={{ maxWidth: 980 }}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-mono text-text-muted tracking-widest uppercase mb-1">Analysis Result</p>
-          <h1 className="font-heading text-2xl font-bold text-text-primary">{result.address}</h1>
+          <p className="eyebrow">Cost oracle · Feasibility report</p>
+          <h1 className="page-title">{result.address}</h1>
           <p className="text-text-muted font-mono text-xs mt-1">
             {result.municipality.toUpperCase()} · {result.zoneCode} · {result.sizeSqm.toLocaleString()}m²
           </p>

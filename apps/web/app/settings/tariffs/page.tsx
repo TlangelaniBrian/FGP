@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { can, readPortalPreference, team, type Role } from "@/lib/portal-state";
 
 const CATEGORIES = [
   { key: "build_rates", label: "Build rates", hint: "R/m² by unit type" },
@@ -13,6 +14,8 @@ const CATEGORIES = [
 type CatKey = (typeof CATEGORIES)[number]["key"];
 
 export default function TariffsAdminPage() {
+  const current = readPortalPreference("fgp_user", team[0]);
+  const canEdit = can(current.role as Role, "tariff");
   const [year, setYear] = useState(2026);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -84,12 +87,12 @@ export default function TariffsAdminPage() {
     "bg-bg-surface border border-border rounded-card px-3 py-2 text-text-primary font-mono text-xs w-full focus:outline-none focus:border-accent-blue";
 
   return (
-    <div className="max-w-3xl mx-auto p-8 flex flex-col gap-6">
+    <div className="portal-page" style={{ maxWidth: 1080 }}>
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-mono text-text-muted tracking-widest uppercase mb-2">Settings · Tariffs</p>
-          <h1 className="font-heading text-2xl font-bold text-text-primary">Tariff Administration</h1>
-          <p className="text-text-muted font-mono text-xs mt-1">
+          <p className="eyebrow">Admin · Municipal inputs</p>
+          <h1 className="page-title">Tariff administration</h1>
+          <p className="page-subtitle">
             SARS transfer duty changes each March budget · municipal BSC each July gazette.
           </p>
         </div>
@@ -102,9 +105,12 @@ export default function TariffsAdminPage() {
             max={2100}
             onChange={(e) => setYear(parseInt(e.target.value, 10) || year)}
             className={`${field} w-24`}
+            disabled={!canEdit}
           />
         </div>
       </div>
+
+      {!canEdit && <div className="card" style={{ padding: "12px 16px", marginBottom: 16, background: "#fff8ea", borderColor: "#f0d59d", color: "#845300", fontSize: 12, fontWeight: 800 }}>Tariffs are locked for {current.role}s. Switch to a Treasurer, Chairperson, or Owner to make changes.</div>}
 
       {loading && <p className="text-text-muted font-mono text-sm">Loading…</p>}
       {loadError && (
@@ -116,7 +122,7 @@ export default function TariffsAdminPage() {
       {!loading &&
         !loadError &&
         CATEGORIES.map(({ key, label, hint }) => (
-          <div key={key} className="bg-bg-surface border border-border rounded-card p-4 flex flex-col gap-2">
+          <div key={key} className="card card-pad" style={{ marginBottom: 14 }}>
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-text-primary font-mono text-sm font-semibold">{label}</div>
@@ -127,6 +133,7 @@ export default function TariffsAdminPage() {
             <textarea
               value={drafts[key] ?? ""}
               onChange={(e) => setDrafts((d) => ({ ...d, [key]: e.target.value }))}
+              disabled={!canEdit}
               rows={key === "bulk_contributions" || key === "transfer_duty_brackets" ? 9 : 5}
               spellCheck={false}
               placeholder={`{ ... } for ${year}`}
@@ -135,7 +142,7 @@ export default function TariffsAdminPage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => save(key)}
-                disabled={saving === key}
+                disabled={!canEdit || saving === key}
                 className="bg-accent-blue text-white font-mono text-xs font-semibold px-4 py-1.5 rounded-card disabled:opacity-50 hover:opacity-90 transition-colors"
               >
                 {saving === key ? "Saving…" : "Save"}

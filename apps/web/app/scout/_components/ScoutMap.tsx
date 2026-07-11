@@ -9,16 +9,16 @@ const MAPLIBRE_VERSION = "4.7.1";
 const MAPLIBRE_JS = `https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/${MAPLIBRE_VERSION}/maplibre-gl.min.js`;
 const MAPLIBRE_CSS = `https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/${MAPLIBRE_VERSION}/maplibre-gl.min.css`;
 
-// CARTO dark raster basemap — free, no API key, matches the dark aesthetic.
-const DARK_STYLE = {
+// CARTO light raster basemap — free, no API key, aligned to the portal theme.
+const LIGHT_STYLE = {
   version: 8,
   sources: {
     carto: {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
       ],
       tileSize: 256,
       attribution: "© OpenStreetMap contributors © CARTO",
@@ -30,14 +30,15 @@ const DARK_STYLE = {
 // Midrand — centre of the pilot area.
 const DEFAULT_CENTER: [number, number] = [28.13, -25.99];
 
-declare global {
-  interface Window {
-    maplibregl?: any;
-  }
-}
+type MapEvent = { lngLat: { lat: number; lng: number } };
+type MapMarker = { setLngLat: (position: [number, number]) => MapMarker; addTo: (map: MapInstance) => MapMarker };
+type MapInstance = { addControl: (control: unknown, position: string) => void; on: (event: "click" | "load", handler: (event?: MapEvent) => void) => void; flyTo: (options: { center: [number, number]; zoom: number }) => void; getZoom: () => number; remove: () => void };
+type MapLibre = { Map: new (options: { container: HTMLDivElement; style: typeof LIGHT_STYLE; center: [number, number]; zoom: number; attributionControl: boolean }) => MapInstance; NavigationControl: new (options: { showCompass: boolean }) => unknown; Marker: new (options: { color: string }) => MapMarker };
 
-let loaderPromise: Promise<any> | null = null;
-function loadMapLibre(): Promise<any> {
+declare global { interface Window { maplibregl?: MapLibre } }
+
+let loaderPromise: Promise<MapLibre> | null = null;
+function loadMapLibre(): Promise<MapLibre> {
   if (typeof window === "undefined") return Promise.reject(new Error("no window"));
   if (window.maplibregl) return Promise.resolve(window.maplibregl);
   if (loaderPromise) return loaderPromise;
@@ -74,12 +75,13 @@ export function ScoutMap({
   height?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
+  const mapRef = useRef<MapInstance | null>(null);
+  const markerRef = useRef<MapMarker | null>(null);
   const onPickRef = useRef(onPick);
-  onPickRef.current = onPick;
 
   const [status, setStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+
+  useEffect(() => { onPickRef.current = onPick; }, [onPick]);
 
   // Initialise the map once.
   useEffect(() => {
@@ -89,14 +91,14 @@ export function ScoutMap({
         if (cancelled || !containerRef.current || mapRef.current) return;
         const map = new maplibregl.Map({
           container: containerRef.current,
-          style: DARK_STYLE,
+          style: LIGHT_STYLE,
           center: DEFAULT_CENTER,
           zoom: 11,
           attributionControl: true,
         });
         map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-        map.on("click", (e: any) => {
-          onPickRef.current({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+        map.on("click", (event) => {
+          if (event) onPickRef.current({ lat: event.lngLat.lat, lng: event.lngLat.lng });
         });
         map.on("load", () => !cancelled && setStatus("ready"));
         mapRef.current = map;
@@ -120,7 +122,7 @@ export function ScoutMap({
     if (markerRef.current) {
       markerRef.current.setLngLat([marker.lng, marker.lat]);
     } else {
-      markerRef.current = new maplibregl.Marker({ color: "#3b82f6" })
+      markerRef.current = new maplibregl.Marker({ color: "#2f70ef" })
         .setLngLat([marker.lng, marker.lat])
         .addTo(map);
     }

@@ -29,18 +29,17 @@ const statusColour: Record<string, string> = {
 export default async function ProjectsPage() {
   const projects = await getProjects();
   return (
-    <div className="p-8">
-      <p className="text-xs font-mono text-text-muted tracking-widest uppercase mb-2">Active</p>
-      <h1 className="font-heading text-2xl font-bold text-text-primary mb-6">Projects</h1>
-      <div className="grid grid-cols-1 gap-4 max-w-2xl">
+    <div className="portal-page">
+      <div className="portal-page-head"><div><p className="eyebrow">Workspace · Delivery pipeline</p><h1 className="page-title">Projects</h1><p className="page-subtitle">Track live developments from first feasibility signal to completion.</p></div><Link className="button button-primary" href="/evaluate">＋ New project analysis</Link></div>
+      <div className="grid-3">
         {projects.map((p) => (
           <Link
             key={p.id}
             href={`/projects/${p.id}`}
-            className="bg-bg-surface border border-border rounded-card p-5 hover:border-accent-blue/50 transition-colors flex justify-between items-start"
+            className="card card-pad hover:border-accent-blue transition-colors flex justify-between items-start"
           >
             <div>
-              <div className="font-heading text-lg text-text-primary font-bold mb-1">{p.name}</div>
+              <div className="card-title" style={{ fontSize: 17 }}>{p.name}</div>
               {p.township && (
                 <div className="text-text-muted font-mono text-xs">ERF {p.erfNumber} · {p.township}</div>
               )}
