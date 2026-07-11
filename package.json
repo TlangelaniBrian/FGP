@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter web dev",
-    "build": "pnpm --filter web build",
+    "build": "npm --prefix apps/web run build",
     "test:api": "node scripts/api-smoke.mjs",
     "typecheck": "pnpm --filter web run typecheck",
     "lint": "pnpm --filter web lint",
