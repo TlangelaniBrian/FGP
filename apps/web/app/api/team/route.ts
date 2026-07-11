@@ -36,3 +36,15 @@ export async function PATCH(req: NextRequest) {
   await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "team_update", title: `Updated ${member.name}`, detail: `${member.email} · ${member.role} · ${member.status}`, entityType: "team_member", entityId: member.id });
   return NextResponse.json(member);
 }
+
+export async function DELETE(req: NextRequest) {
+  const guard = await requireSessionCapability("team", req);
+  if (guard.response) return guard.response;
+  const body = await req.json() as { id?: number };
+  if (!body.id) return NextResponse.json({ error: "member id is required" }, { status: 422 });
+  if (body.id === (await db.select({ id: teamMembers.id }).from(teamMembers).where(eq(teamMembers.userId, guard.actor!.userId)).limit(1))[0]?.id) return NextResponse.json({ error: "You cannot remove your own workspace access" }, { status: 422 });
+  const [member] = await db.update(teamMembers).set({ status: "removed" }).where(eq(teamMembers.id, body.id)).returning();
+  if (!member) return NextResponse.json({ error: "member not found" }, { status: 404 });
+  await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "team_remove", title: `Removed ${member.name}`, detail: `${member.email} · ${member.role}`, entityType: "team_member", entityId: member.id });
+  return NextResponse.json(member);
+}

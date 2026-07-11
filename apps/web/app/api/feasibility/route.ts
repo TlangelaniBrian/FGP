@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db, zoningSchemeRules } from "@fgp/database";
 import { and, eq } from "drizzle-orm";
+import { getAuthenticatedActor } from "@/lib/portal-auth";
 
 const schema = z.object({
   address: z.string().min(1).max(500),
@@ -40,6 +41,7 @@ async function lookupZoneRules(municipality: string, zoneCode: string) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!await getAuthenticatedActor(req)) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) {

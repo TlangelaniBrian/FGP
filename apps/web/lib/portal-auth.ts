@@ -22,17 +22,12 @@ export async function getAuthenticatedActor(request?: Request) {
   if (error || !data.user) return null;
   const email = data.user.email?.toLowerCase() ?? "";
   const [storedMember] = await db.select().from(teamMembers).where(or(eq(teamMembers.userId, data.user.id), eq(teamMembers.email, email))).limit(1);
-  const knownMember = storedMember ?? Object.entries({
-    "tlangelani@fgproperties.co.za": { name: "Tlangelani Mkhabela", role: "Treasurer" as Role },
-    "thabo@fgproperties.co.za": { name: "Thabo Nkosi", role: "Chairperson" as Role },
-    "lerato@fgproperties.co.za": { name: "Lerato Dube", role: "Analyst" as Role },
-    "mpho@fgproperties.co.za": { name: "Mpho Molefe", role: "Viewer" as Role },
-  }).find(([memberEmail]) => memberEmail === email)?.[1];
+  if (storedMember?.status === "suspended" || storedMember?.status === "removed") return null;
   return {
     userId: data.user.id,
     email,
-    name: knownMember?.name ?? data.user.user_metadata?.full_name ?? email,
-    role: (knownMember?.role ?? "Viewer") as Role,
+    name: storedMember?.name ?? data.user.user_metadata?.full_name ?? email,
+    role: (storedMember?.role ?? "Viewer") as Role,
   };
 }
 

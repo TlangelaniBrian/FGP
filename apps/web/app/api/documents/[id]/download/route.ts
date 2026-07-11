@@ -20,7 +20,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (admin) {
     const path = `${actor.userId}/${document.id}-${document.docType}.pdf`;
     const upload = await admin.storage.from("compliance-documents").upload(path, pdf, { contentType: "application/pdf", upsert: true });
-    if (!upload.error) pdfUrl = admin.storage.from("compliance-documents").getPublicUrl(path).data.publicUrl;
+    if (!upload.error) {
+      const signed = await admin.storage.from("compliance-documents").createSignedUrl(path, 3600);
+      if (!signed.error) pdfUrl = signed.data.signedUrl;
+    }
   }
   await db.update(complianceDocuments).set({ pdfUrl, status: "ready" }).where(eq(complianceDocuments.id, id));
   return new Response(pdf, { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename=${document.docType}.pdf` } });

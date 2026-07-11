@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { getAuthenticatedActor } from "@/lib/portal-auth";
 
 // Proxy for the worker's POST /analyze/parcel spatial join. The worker owns the
 // PostGIS query; this route just validates the coordinate and forwards it,
@@ -11,6 +12,7 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  if (!await getAuthenticatedActor(req)) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) {

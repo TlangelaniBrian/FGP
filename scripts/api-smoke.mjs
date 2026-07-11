@@ -32,9 +32,14 @@ const viewerWrites = [
   ["/api/settings", "PUT", { autoAnalyze: false }],
   ["/api/listings", "POST", { address: "Smoke test", municipality: "johannesburg", sizeSqm: 500, price: 100000 }],
   ["/api/scrape/jobs", "POST", { source: "property24", location: "Midrand" }],
+  ["/api/team", "DELETE", { id: 1 }],
 ];
 for (const [path, method, body] of viewerWrites) { const { response } = await api(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); assert.equal(response.status, 403, `${path} unexpectedly allowed Viewer write`); }
 
 const unauthenticated = await fetch(`${site}/api/capital`);
 assert.equal(unauthenticated.status, 401);
+for (const path of ["/api/parcel", "/api/feasibility"]) {
+  const response = await fetch(`${site}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  assert.equal(response.status, 401, `${path} unexpectedly exposed without a session`);
+}
 console.log(`API smoke passed for ${protectedReads.length} authenticated reads and ${viewerWrites.length} denied writes.`);
