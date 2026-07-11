@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFeasibilityStore } from "@/lib/feasibility-store";
+import { actorHeaders } from "@/lib/portal-client";
 
 const fmt = (n: number) => `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 const pct = (n: number) => `${n.toFixed(1)}%`;
@@ -11,6 +12,9 @@ export default function EvaluateResultPage() {
   const { result, formValues, clear } = useFeasibilityStore();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ listingId: number; reportId: number } | null>(null);
+  const [project, setProject] = useState<{ id: number; name: string } | null>(null);
+  const [projectName, setProjectName] = useState("");
+  const [projectError, setProjectError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!result) router.replace("/evaluate");
@@ -23,7 +27,7 @@ export default function EvaluateResultPage() {
     setSaving(true);
     const res = await fetch("/api/feasibility/save", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: actorHeaders(),
       body: JSON.stringify({
         address: result.address, municipality: result.municipality, zoneCode: result.zoneCode,
         sizeSqm: result.sizeSqm, price: result.price, unitType: result.unitType, targetUnits: result.targetUnits,
@@ -41,6 +45,15 @@ export default function EvaluateResultPage() {
     const data = await res.json();
     setSaved(data);
     setSaving(false);
+  }
+
+  async function createProject() {
+    if (!saved || !formValues || !projectName.trim()) return;
+    setProjectError(null);
+    const res = await fetch("/api/projects", { method: "POST", headers: actorHeaders(), body: JSON.stringify({ listingId: saved.listingId, reportId: saved.reportId, name: projectName.trim(), phase1TargetZar: result?.costTotal ?? 0 }) });
+    const body = await res.json();
+    if (!res.ok) { setProjectError(body.error ? JSON.stringify(body.error) : "Could not create project"); return; }
+    setProject(body);
   }
 
   const card = "bg-bg-surface border border-border rounded-card p-5";
@@ -127,7 +140,7 @@ export default function EvaluateResultPage() {
             {saving ? "Saving..." : "Keep this analysis"}
           </button>
         ) : (
-          <p className="text-accent-green font-mono text-sm">Saved — report #{saved.reportId}</p>
+          <div><p className="text-accent-green font-mono text-sm">Saved — report #{saved.reportId}</p>{!project ? <div style={{ display: "flex", gap: 8, marginTop: 10 }}><input className="field" value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="Project name" aria-label="Project name" /><button className="button button-secondary" onClick={createProject}>Create project</button></div> : <p className="text-accent-green font-mono text-xs mt-2">Project created: <a href={`/projects/${project.id}`}>{project.name}</a></p>}{projectError && <p className="text-accent-red font-mono text-xs mt-1">{projectError}</p>}</div>
         )}
         <button
           onClick={() => { clear(); router.push("/evaluate"); }}
