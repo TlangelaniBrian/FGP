@@ -12,6 +12,8 @@
 - [x] Add source-specific JSON-LD scraper adapters and run-now job execution.
 - [x] Add worker PDF generation with storage-backed download route and fallback renderer.
 - [x] Run typecheck, lint, and production build.
+- [x] Replace dashboard mock metrics, activity, and scout signal with persisted data.
+- [ ] Complete authenticated production deployment and verify the live URL.
 
 ## Review
 
