@@ -74,6 +74,9 @@ try {
   result = await api("/api/documents", token, { method: "POST", body: JSON.stringify({ listingId, reportId, municipality: "johannesburg", forms: ["zoning_certificate", "dolomite_declaration"], prefilledData: { erf_number: "SMOKE-1", zone_code: "RES3" } }) });
   assert.equal(result.response.status, 201, JSON.stringify(result.payload));
   assert.equal(result.payload.length, 2);
+  result = await api(`/api/documents/${result.payload[0].id}`, token, { method: "PATCH", body: JSON.stringify({ status: "submitted" }) });
+  assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+  assert.equal(result.payload.status, "submitted");
 
   result = await api(`/api/projects/${projectId}/checkins`, token, { method: "POST", body: JSON.stringify({ weekOf: "2026-07-13", savingsConfirmed: true, depositZar: 25000, supplierProgress: "Smoke test" }) });
   assert.equal(result.response.status, 201, JSON.stringify(result.payload));

@@ -25,6 +25,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       if (!signed.error) pdfUrl = signed.data.signedUrl;
     }
   }
-  await db.update(complianceDocuments).set({ pdfUrl, status: "ready" }).where(eq(complianceDocuments.id, id));
+  await db.update(complianceDocuments).set({ pdfUrl, status: document.status === "draft" ? "ready" : document.status }).where(eq(complianceDocuments.id, id));
   return new Response(pdf, { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename=${document.docType}.pdf` } });
 }

@@ -11,7 +11,9 @@ export async function GET(req: NextRequest) {
   const params = new URL(req.url).searchParams;
   const query = params.get("q")?.trim();
   const status = params.get("status");
+  const listingId = Number(params.get("id"));
   const filters = [eq(listings.userId, actor.userId)];
+  if (Number.isInteger(listingId) && listingId > 0) filters.push(eq(listings.id, listingId));
   if (query) filters.push(or(ilike(listings.address, `%${query}%`), ilike(listings.suburb, `%${query}%`))!);
   if (status) filters.push(eq(listings.status, status));
   const rows = await db.select().from(listings).where(and(...filters)).orderBy(desc(listings.feasibilityScore), desc(listings.createdAt)).limit(100);
