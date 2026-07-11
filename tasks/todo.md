@@ -13,6 +13,7 @@
 - [x] Add worker PDF generation with storage-backed download route and fallback renderer.
 - [x] Run typecheck, lint, and production build.
 - [x] Replace dashboard mock metrics, activity, and scout signal with persisted data.
+- [x] Add production preflight and checked-in Supabase migration command.
 - [ ] Complete authenticated production deployment and verify the live URL.
 
 ## Review

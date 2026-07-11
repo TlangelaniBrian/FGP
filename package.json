@@ -6,6 +6,8 @@
     "dev": "pnpm --filter web dev",
     "build": "npm --prefix apps/web run build",
     "test:api": "node scripts/api-smoke.mjs",
+    "check:production": "node scripts/production-preflight.mjs",
+    "migrate:production": "./scripts/migrate-production.sh",
     "typecheck": "pnpm --filter web run typecheck",
     "lint": "pnpm --filter web lint",
     "seed:zoning": "tsx scripts/seed/seed_zoning_rules.ts",
