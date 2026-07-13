@@ -5,8 +5,8 @@ import { useFeasibilityStore } from "@/lib/feasibility-store";
 import { actorHeaders } from "@/lib/portal-client";
 import { usePortalActor } from "@/lib/portal-actor";
 import { can } from "@/lib/portal-state";
+import { formatZar } from "@/lib/format";
 
-const fmt = (n: number) => `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 const pct = (n: number) => `${n.toFixed(1)}%`;
 
 export default function EvaluateResultPage() {
@@ -68,7 +68,7 @@ export default function EvaluateResultPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="portal-grid-3">
         <div className={card}>
           <p className={statLabel}>Score</p>
           <p className="font-mono text-3xl font-bold text-text-primary">
@@ -102,22 +102,22 @@ export default function EvaluateResultPage() {
           ].map(([label, val]) => (
             <div key={label as string} className="flex justify-between text-xs font-mono">
               <span className="text-text-muted">{label}</span>
-              <span className="text-text-primary">{fmt(val as number)}</span>
+              <span className="text-text-primary">{formatZar(val as number)}</span>
             </div>
           ))}
           <div className="border-t border-border mt-1 pt-2 flex justify-between text-sm font-mono font-bold">
             <span className="text-text-muted">Total Investment</span>
-            <span className="text-text-primary">{fmt(result.costTotal)}</span>
+            <span className="text-text-primary">{formatZar(result.costTotal)}</span>
           </div>
         </div>
       </div>
 
       <div className={card}>
         <p className={statLabel + " mb-3"}>Income Projection</p>
-        <div className="grid grid-cols-3 gap-4">
-          <div><p className={statLabel}>Rent/Unit/Mo</p><p className={statVal}>{fmt(result.rentPerUnitMonthly)}</p></div>
-          <div><p className={statLabel}>Gross Monthly</p><p className={statVal}>{fmt(result.grossMonthlyIncome)}</p></div>
-          <div><p className={statLabel}>Gross Annual</p><p className={statVal}>{fmt(result.grossAnnualIncome)}</p></div>
+        <div className="portal-grid-3">
+          <div><p className={statLabel}>Rent/Unit/Mo</p><p className={statVal}>{formatZar(result.rentPerUnitMonthly)}</p></div>
+          <div><p className={statLabel}>Gross Monthly</p><p className={statVal}>{formatZar(result.grossMonthlyIncome)}</p></div>
+          <div><p className={statLabel}>Gross Annual</p><p className={statVal}>{formatZar(result.grossAnnualIncome)}</p></div>
         </div>
       </div>
 
@@ -128,7 +128,7 @@ export default function EvaluateResultPage() {
           <button
             onClick={keep}
             disabled={saving}
-            className="bg-accent-blue text-white font-mono text-sm font-semibold px-6 py-2.5 rounded-card transition-colors disabled:opacity-50 hover:opacity-90"
+            className="portal-transition bg-accent-blue text-white font-mono text-sm font-semibold px-6 py-2.5 rounded-card disabled:opacity-50 hover:opacity-90"
           >
             {saving ? "Saving..." : "Keep this analysis"}
           </button>
@@ -137,7 +137,7 @@ export default function EvaluateResultPage() {
         ))}
         <button
           onClick={() => { clear(); router.push("/evaluate"); }}
-          className="border border-border text-text-muted hover:text-text-primary font-mono text-sm px-6 py-2.5 rounded-card transition-colors"
+          className="portal-transition border border-border text-text-muted hover:text-text-primary font-mono text-sm px-6 py-2.5 rounded-card"
         >
           New Analysis
         </button>

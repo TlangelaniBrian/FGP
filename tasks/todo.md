@@ -83,6 +83,14 @@
 - [x] Replay exact migrations 0001-0018 and run the full authenticated verification matrix.
 - [x] Append review evidence, self-review, and commit locally without pushing.
 
+## Task 5D portal visual foundation slice (2026-07-13)
+
+- [x] Add focused source assertions for explicit portal grid consumers and canonical visible ZAR formatting.
+- [x] Convert the named Evaluate, Cost Oracle, Parcel facts, Dashboard, Scout, and Project finance grids to the 860px portal contract.
+- [x] Route the named visible money consumers through `formatZar` without changing dates, areas, percentages, or API payloads.
+- [x] Remove residual generic transitions and button hover translation while preserving the existing entry and reduced-motion contract.
+- [x] Run the complete Task 5D verification matrix and self-review the authorized visual-only diff.
+
 ## Review
 
 Implemented the shared Capitec-style shell, route-aware navigation, visual

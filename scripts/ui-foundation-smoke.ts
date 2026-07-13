@@ -119,6 +119,72 @@ async function main(): Promise<void> {
   assert.match(globals, /@media\s*\(max-width:\s*860px\)/, "globals.css must use the 860px portal breakpoint");
   assert.match(globals, /cubic-bezier\(0\.2,\s*0,\s*0,\s*1\)/, "globals.css must use the prescribed easing");
 
+  for (const columns of [2, 3, 4]) {
+    assert.match(
+      globals,
+      new RegExp(`\\.portal-grid-${columns}\\s*\\{[^}]*grid-template-columns:\\s*repeat\\(${columns},\\s*minmax\\(0,\\s*1fr\\)\\)`, "s"),
+      `.portal-grid-${columns} must define an explicit ${columns}-column portal grid`,
+    );
+  }
+
+  const responsivePortalGrids = blocksAfter(globals, /@media\s*\(max-width:\s*860px\)\s*/)[0];
+  assert.ok(responsivePortalGrids, "globals.css must define the 860px responsive contract");
+  for (const columns of [2, 3, 4]) {
+    assert.match(
+      responsivePortalGrids,
+      new RegExp(`\\.portal-grid-${columns}`),
+      `.portal-grid-${columns} must participate in the 860px responsive contract`,
+    );
+  }
+  assert.match(
+    responsivePortalGrids,
+    /\.portal-grid-2[\s\S]*grid-template-columns:\s*1fr|\.portal-grid-2\s*,[\s\S]*grid-template-columns:\s*1fr/,
+    "Portal grids must stack to one column at 860px",
+  );
+
+  const gridConsumers: Record<string, string[]> = {
+    "apps/web/app/page.tsx": ["portal-grid-2"],
+    "apps/web/app/scout/[id]/page.tsx": ["portal-grid-2"],
+    "apps/web/app/evaluate/page.tsx": ["portal-grid-2"],
+    "apps/web/app/evaluate/result/page.tsx": ["portal-grid-3"],
+    "apps/web/app/projects/page.tsx": ["portal-grid-3"],
+    "apps/web/app/projects/[id]/_components/FinanceStrip.tsx": ["portal-grid-3"],
+    "apps/web/app/scout/_components/ParcelDetail.tsx": ["portal-grid-4"],
+  };
+  for (const [relativePath, classes] of Object.entries(gridConsumers)) {
+    const consumer = source(relativePath);
+    for (const className of classes) {
+      assert.match(consumer, new RegExp(`\\b${className}\\b`), `${relativePath} must consume ${className}`);
+    }
+  }
+
+  const moneyConsumers = [
+    "apps/web/app/page.tsx",
+    "apps/web/app/scout/page.tsx",
+    "apps/web/app/scout/[id]/page.tsx",
+    "apps/web/app/evaluate/result/page.tsx",
+    "apps/web/app/projects/page.tsx",
+    "apps/web/app/projects/[id]/_components/FinanceStrip.tsx",
+    "apps/web/app/projects/[id]/_components/BudgetTable.tsx",
+  ];
+  for (const relativePath of moneyConsumers) {
+    const consumer = source(relativePath);
+    assert.match(consumer, /import\s*\{\s*formatZar\s*\}\s*from\s*["']@\/lib\/format["']/, `${relativePath} must import formatZar directly`);
+    assert.doesNotMatch(consumer, /const\s+fmt\s*=|`R\s+\$\{|>R\s*\{/, `${relativePath} must not define or render page-local ZAR formatting`);
+  }
+
+  const motionConsumers = [
+    "apps/web/app/scout/page.tsx",
+    "apps/web/app/evaluate/page.tsx",
+    "apps/web/app/evaluate/result/page.tsx",
+    "apps/web/app/projects/page.tsx",
+    "apps/web/app/scout/_components/ParcelDetail.tsx",
+  ];
+  for (const relativePath of motionConsumers) {
+    assert.doesNotMatch(source(relativePath), /\btransition-(?:all|colors)\b/, `${relativePath} must not use generic Tailwind transitions`);
+  }
+  assert.doesNotMatch(globals, /\.button:hover\s*\{[^}]*translateY/, "Buttons must not translate on hover");
+
   const portalPage = blocksAfter(globals, /\.portal-page\s*(?=\{)/).find((block) => /\banimation(?:-name)?\s*:/.test(block));
   assert.ok(portalPage, ".portal-page must apply the entry animation");
   const entryAnimation = [...globals.matchAll(/@keyframes\s+([\w-]+)/g)]

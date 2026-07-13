@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { getRequestOrigin } from "@/lib/request-origin";
+import { formatZar } from "@/lib/format";
 
 type Project = {
   id: number;
@@ -36,12 +37,12 @@ export default async function ProjectsPage() {
   return (
     <div className="portal-page">
       <div className="portal-page-head"><div><p className="eyebrow">Workspace · Delivery pipeline</p><h1 className="page-title">Projects</h1><p className="page-subtitle">Track live developments from first feasibility signal to completion.</p></div><Link className="button button-primary" href="/evaluate">＋ New project analysis</Link></div>
-      <div className="grid-3">
+      <div className="portal-grid-3">
         {projects.map((p) => (
           <Link
             key={p.id}
             href={`/projects/${p.id}`}
-            className="card card-pad hover:border-accent-blue transition-colors flex justify-between items-start"
+            className="portal-transition card card-pad hover:border-accent-blue flex justify-between items-start"
           >
             <div>
               <div className="card-title" style={{ fontSize: 17 }}>{p.name}</div>
@@ -50,7 +51,7 @@ export default async function ProjectsPage() {
               )}
               {p.phase1TargetZar && (
                 <div className="text-text-muted font-mono text-xs mt-1">
-                  Target: R {Number(p.phase1TargetZar).toLocaleString("en-ZA")} · Saving: R {Number(p.monthlySavingZar ?? 0).toLocaleString("en-ZA")}/mo
+                  Target: {formatZar(Number(p.phase1TargetZar))} · Saving: {formatZar(Number(p.monthlySavingZar ?? 0))}/mo
                 </div>
               )}
             </div>

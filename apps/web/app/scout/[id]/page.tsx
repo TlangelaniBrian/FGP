@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db, listings } from "@fgp/database";
+import { formatZar } from "@/lib/format";
 import { getAuthenticatedActor } from "@/lib/portal-auth";
 import { LinkParcelForm } from "./_components/LinkParcelForm";
 
@@ -16,5 +17,61 @@ export default async function ParcelPage({ params }: { params: Promise<{ id: str
   const price = listing.price ? Number(listing.price) : null;
   const score = listing.feasibilityScore;
   const scoreLabel = score == null ? "Unscored" : score >= 80 ? "High-signal opportunity" : score >= 60 ? "Review required" : "Low-signal lead";
-  return <div className="portal-page"><div className="portal-page-head"><div><p className="eyebrow">Scout · Persisted listing</p><h1 className="page-title">{listing.address ?? `Listing #${listing.id}`}</h1><p className="page-subtitle">{[listing.suburb, listing.municipality, listing.source].filter(Boolean).join(" · ") || "Gauteng lead"}</p></div><div className="split"><Link href="/evaluate" className="button button-primary">Evaluate land</Link><Link href={`/scout/${listing.id}/zoning`} className="button button-quiet">Compliance package</Link></div></div><div className="stat-grid" style={{ marginBottom: 18 }}><div className="card stat-card"><span className="card-kicker">Scout score</span><div className="stat-value">{score ?? "—"}<span style={{ fontSize: 14, color: "#6d7885" }}>{score == null ? "" : "/100"}</span></div><div className="stat-note">{scoreLabel}</div></div><div className="card stat-card"><span className="card-kicker">Land size</span><div className="stat-value">{size == null ? "—" : size.toLocaleString("en-ZA")}</div><div className="stat-note">{size == null ? "Size pending" : "m² listed area"}</div></div><div className="card stat-card"><span className="card-kicker">Zone</span><div className="stat-value">{listing.zoneCode ?? "—"}</div><div className="stat-note">{listing.zoneCode ? "Persisted listing match" : "Parcel link required"}</div></div><div className="card stat-card"><span className="card-kicker">Dolomite</span><div className="stat-value" style={{ color: listing.dolomiteRisk === "LOW" ? "#16834b" : undefined }}>{listing.dolomiteRisk ?? "—"}</div><div className="stat-note">{price == null ? "Price pending" : `R ${price.toLocaleString("en-ZA")}`}</div></div></div><div className="grid-2"><section className="card card-pad"><div className="split"><div><span className="card-kicker">Listing context</span><h2 className="card-title" style={{ marginTop: 6 }}>What entered the pipeline</h2></div><span className={`tag ${listing.status === "analyzed" ? "tag-green" : "tag-blue"}`}>{listing.status ?? "new"}</span></div><div className="list-row"><span><strong>Source</strong><small>{listing.sourceUrl ? <a href={listing.sourceUrl} target="_blank" rel="noreferrer">Open source listing</a> : "Manual or imported record"}</small></span><span className="tag tag-blue">{listing.source}</span></div><div className="list-row"><span><strong>Address</strong><small>{listing.address ?? "Not supplied"}</small></span><span className="muted">{listing.city ?? listing.municipality ?? "Gauteng"}</span></div>{listing.description && <p className="muted" style={{ marginTop: 16, fontSize: 12, lineHeight: 1.5 }}>{listing.description}</p>}<Link href={`/scout/${listing.id}/zoning`} className="button button-secondary" style={{ width: "100%", marginTop: 16 }}>Review zoning and forms</Link></section><section className="card card-pad"><span className="card-kicker">Spatial intelligence</span><h2 className="card-title" style={{ marginTop: 6 }}>Attach the real parcel</h2><p className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>A listing becomes actionable once its coordinate is resolved against the parcel, zoning, dolomite, and amenity layers.</p><Link href="/scout" className="button button-quiet" style={{ marginTop: 8 }}>Open Scout map</Link><LinkParcelForm listingId={listing.id} parcelId={listing.parcelId ?? null} /></section></div></div>;
+
+  return (
+    <div className="portal-page">
+      <div className="portal-page-head">
+        <div>
+          <p className="eyebrow">Scout · Persisted listing</p>
+          <h1 className="page-title">{listing.address ?? `Listing #${listing.id}`}</h1>
+          <p className="page-subtitle">{[listing.suburb, listing.municipality, listing.source].filter(Boolean).join(" · ") || "Gauteng lead"}</p>
+        </div>
+        <div className="split">
+          <Link href="/evaluate" className="button button-primary">Evaluate land</Link>
+          <Link href={`/scout/${listing.id}/zoning`} className="button button-quiet">Compliance package</Link>
+        </div>
+      </div>
+      <div className="stat-grid" style={{ marginBottom: 18 }}>
+        <div className="card stat-card">
+          <span className="card-kicker">Scout score</span>
+          <div className="stat-value">{score ?? "—"}<span style={{ fontSize: 14, color: "#6d7885" }}>{score == null ? "" : "/100"}</span></div>
+          <div className="stat-note">{scoreLabel}</div>
+        </div>
+        <div className="card stat-card">
+          <span className="card-kicker">Land size</span>
+          <div className="stat-value">{size == null ? "—" : size.toLocaleString("en-ZA")}</div>
+          <div className="stat-note">{size == null ? "Size pending" : "m² listed area"}</div>
+        </div>
+        <div className="card stat-card">
+          <span className="card-kicker">Zone</span>
+          <div className="stat-value">{listing.zoneCode ?? "—"}</div>
+          <div className="stat-note">{listing.zoneCode ? "Persisted listing match" : "Parcel link required"}</div>
+        </div>
+        <div className="card stat-card">
+          <span className="card-kicker">Dolomite</span>
+          <div className="stat-value" style={{ color: listing.dolomiteRisk === "LOW" ? "#16834b" : undefined }}>{listing.dolomiteRisk ?? "—"}</div>
+          <div className="stat-note">{price == null ? "Price pending" : formatZar(price)}</div>
+        </div>
+      </div>
+      <div className="portal-grid-2">
+        <section className="card card-pad">
+          <div className="split">
+            <div><span className="card-kicker">Listing context</span><h2 className="card-title" style={{ marginTop: 6 }}>What entered the pipeline</h2></div>
+            <span className={`tag ${listing.status === "analyzed" ? "tag-green" : "tag-blue"}`}>{listing.status ?? "new"}</span>
+          </div>
+          <div className="list-row"><span><strong>Source</strong><small>{listing.sourceUrl ? <a href={listing.sourceUrl} target="_blank" rel="noreferrer">Open source listing</a> : "Manual or imported record"}</small></span><span className="tag tag-blue">{listing.source}</span></div>
+          <div className="list-row"><span><strong>Address</strong><small>{listing.address ?? "Not supplied"}</small></span><span className="muted">{listing.city ?? listing.municipality ?? "Gauteng"}</span></div>
+          {listing.description && <p className="muted" style={{ marginTop: 16, fontSize: 12, lineHeight: 1.5 }}>{listing.description}</p>}
+          <Link href={`/scout/${listing.id}/zoning`} className="button button-secondary" style={{ width: "100%", marginTop: 16 }}>Review zoning and forms</Link>
+        </section>
+        <section className="card card-pad">
+          <span className="card-kicker">Spatial intelligence</span>
+          <h2 className="card-title" style={{ marginTop: 6 }}>Attach the real parcel</h2>
+          <p className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>A listing becomes actionable once its coordinate is resolved against the parcel, zoning, dolomite, and amenity layers.</p>
+          <Link href="/scout" className="button button-quiet" style={{ marginTop: 8 }}>Open Scout map</Link>
+          <LinkParcelForm listingId={listing.id} parcelId={listing.parcelId ?? null} />
+        </section>
+      </div>
+    </div>
+  );
 }

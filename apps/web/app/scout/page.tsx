@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ScoutMap } from "./_components/ScoutMap";
 import { ParcelDetail } from "./_components/ParcelDetail";
 import type { ParcelAnalysis } from "@/lib/parcel";
+import { formatZar } from "@/lib/format";
 
 type Coord = { lat: number; lng: number };
 type Listing = { id: number; address: string | null; suburb: string | null; municipality: string | null; sizeSqm: string | null; price: string | null; zoneCode: string | null; dolomiteRisk: string | null; feasibilityScore: number | null; status: string | null };
@@ -104,7 +105,7 @@ export default function ScoutPage() {
         </p>
       </div>
 
-      <section className="card card-pad" style={{ marginBottom: 18 }}><div className="split"><div><span className="card-kicker">Persisted leads</span><h2 className="card-title" style={{ marginTop: 6 }}>Scout pipeline</h2></div><span className="tag tag-blue">{listings.length} listings</span></div><div className="split" style={{ marginTop: 16 }}><input className="field" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search suburb or address" /><select className="field" style={{ maxWidth: 180, marginLeft: 10 }} value={listingStatus} onChange={(event) => setListingStatus(event.target.value)}><option value="all">All statuses</option><option value="new">New</option><option value="analyzed">Analysed</option><option value="active_project">Project</option></select></div>{listings.filter((listing) => listingStatus === "all" || listing.status === listingStatus).filter((listing) => `${listing.address ?? ""} ${listing.suburb ?? ""}`.toLowerCase().includes(query.toLowerCase())).slice(0, 6).map((listing) => <div className="list-row" key={listing.id}><span><strong>{listing.address ?? "Untitled listing"}</strong><small>{listing.suburb ?? listing.municipality ?? "Gauteng"} · {listing.sizeSqm ? `${Number(listing.sizeSqm).toLocaleString("en-ZA")} m²` : "Size pending"} · {listing.price ? `R ${Number(listing.price).toLocaleString("en-ZA")}` : "Price pending"}</small></span><span className="split"><span className="tag tag-blue">{listing.zoneCode ?? "Unmatched"}</span>{listing.feasibilityScore != null && <span className="score-ring"><span>{listing.feasibilityScore}</span></span>}<Link href={`/scout/${listing.id}`} className="button button-quiet" style={{ minHeight: 30, padding: "0 9px" }}>Open</Link></span></div>)}{listings.length === 0 && <p className="muted" style={{ margin: "16px 0 0", fontSize: 12 }}>No persisted listings yet. Save an evaluation or import a listing to start the pipeline.</p>}</section>
+      <section className="card card-pad" style={{ marginBottom: 18 }}><div className="split"><div><span className="card-kicker">Persisted leads</span><h2 className="card-title" style={{ marginTop: 6 }}>Scout pipeline</h2></div><span className="tag tag-blue">{listings.length} listings</span></div><div className="split" style={{ marginTop: 16 }}><input className="field" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search suburb or address" /><select className="field" style={{ maxWidth: 180, marginLeft: 10 }} value={listingStatus} onChange={(event) => setListingStatus(event.target.value)}><option value="all">All statuses</option><option value="new">New</option><option value="analyzed">Analysed</option><option value="active_project">Project</option></select></div>{listings.filter((listing) => listingStatus === "all" || listing.status === listingStatus).filter((listing) => `${listing.address ?? ""} ${listing.suburb ?? ""}`.toLowerCase().includes(query.toLowerCase())).slice(0, 6).map((listing) => <div className="list-row" key={listing.id}><span><strong>{listing.address ?? "Untitled listing"}</strong><small>{listing.suburb ?? listing.municipality ?? "Gauteng"} · {listing.sizeSqm ? `${Number(listing.sizeSqm).toLocaleString("en-ZA")} m²` : "Size pending"} · {listing.price ? formatZar(Number(listing.price)) : "Price pending"}</small></span><span className="split"><span className="tag tag-blue">{listing.zoneCode ?? "Unmatched"}</span>{listing.feasibilityScore != null && <span className="score-ring"><span>{listing.feasibilityScore}</span></span>}<Link href={`/scout/${listing.id}`} className="button button-quiet" style={{ minHeight: 30, padding: "0 9px" }}>Open</Link></span></div>)}{listings.length === 0 && <p className="muted" style={{ margin: "16px 0 0", fontSize: 12 }}>No persisted listings yet. Save an evaluation or import a listing to start the pipeline.</p>}</section>
       <ScoutMap marker={marker} onPick={handlePick} />
 
       <form onSubmit={handleManualSubmit} className="flex flex-wrap items-end gap-3">
@@ -119,7 +120,7 @@ export default function ScoutPage() {
         <button
           type="submit"
           disabled={loading}
-          className="bg-accent-blue text-white font-mono text-sm font-semibold px-5 py-2 rounded-card disabled:opacity-50 hover:opacity-90 transition-colors"
+          className="portal-transition bg-accent-blue text-white font-mono text-sm font-semibold px-5 py-2 rounded-card disabled:opacity-50 hover:opacity-90"
         >
           {loading ? "Analysing…" : "Analyse"}
         </button>

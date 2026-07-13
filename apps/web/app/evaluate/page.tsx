@@ -111,7 +111,7 @@ export default function EvaluatePage() {
           <input {...register("address")} placeholder="123 Main St, Midrand" className={field} />
           {errors.address && <p className={err}>{errors.address.message}</p>}
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="portal-grid-2">
           <div>
             <label className={label}>Municipality</label>
             <select {...register("municipality")} className={field}>
@@ -127,7 +127,7 @@ export default function EvaluatePage() {
             </select>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="portal-grid-2">
           <div>
             <label className={label}>Size (m²)</label>
             <input type="number" {...register("size_sqm", { valueAsNumber: true })} className={field} />
@@ -139,7 +139,7 @@ export default function EvaluatePage() {
             {errors.price && <p className={err}>{errors.price.message}</p>}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="portal-grid-2">
           <div>
             <label className={label}>Unit Type</label>
             <select {...register("unit_type")} className={field}>
@@ -171,7 +171,7 @@ export default function EvaluatePage() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="bg-accent-blue text-white font-mono text-sm font-semibold py-2.5 rounded-card transition-colors disabled:opacity-50 hover:opacity-90"
+          className="portal-transition bg-accent-blue text-white font-mono text-sm font-semibold py-2.5 rounded-card disabled:opacity-50 hover:opacity-90"
         >
           {isSubmitting ? "Calculating..." : "Run Analysis"}
         </button>
