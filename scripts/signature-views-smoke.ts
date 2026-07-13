@@ -15,8 +15,10 @@ async function main(): Promise<void> {
 const rootPackage = JSON.parse(source("package.json")) as { scripts?: Record<string, string> };
 assert.equal(rootPackage.scripts?.["test:signature-views"], "tsx scripts/signature-views-smoke.ts");
 
-const webPackage = JSON.parse(source("apps/web/package.json")) as { dependencies?: Record<string, string> };
+const webPackage = JSON.parse(source("apps/web/package.json")) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
 assert.equal(webPackage.dependencies?.["maplibre-gl"], "4.7.1", "MapLibre must be pinned exactly to 4.7.1");
+assert.equal(webPackage.dependencies?.three, "0.160.0", "Three.js must be pinned exactly to 0.160.0");
+assert.equal(webPackage.devDependencies?.["@types/three"], "0.160.0", "Three.js types must be pinned exactly to 0.160.0");
 
 const selectionPath = path.join(root, "apps/web/lib/scout-selection.ts");
 assert.ok(existsSync(selectionPath), "Scout must expose an executable pure selection-state helper");
@@ -69,6 +71,26 @@ assert.equal(fakeAttributes.get("aria-hidden"), "true", "Coordinate markers must
 assert.equal(fakeAttributes.get("role"), "presentation");
 assert.equal(fakeAttributes.has("aria-label"), false);
 assert.equal(fakeAttributes.has("tabindex"), false);
+
+const parcelGeometryPath = path.join(root, "apps/web/lib/parcel-geometry.ts");
+const parcelGeometry = await import(pathToFileURL(parcelGeometryPath).href);
+const polygon = { type: "Polygon", coordinates: [[[28.1, -25.9], [28.2, -25.9], [28.2, -26], [28.1, -25.9]]] };
+assert.deepEqual(parcelGeometry.parseSelectedParcelGeoJSON(JSON.stringify(polygon)), polygon, "Valid serialized Polygon geometry must be accepted");
+const multiPolygon = { type: "MultiPolygon", coordinates: [[[[28.1, -25.9], [28.2, -25.9], [28.2, -26], [28.1, -25.9]]]] };
+assert.deepEqual(parcelGeometry.parseSelectedParcelGeoJSON(multiPolygon), multiPolygon, "Valid MultiPolygon geometry must be accepted");
+for (const malformed of [
+  "not-json",
+  { type: "Point", coordinates: [28.1, -25.9] },
+  { type: "Polygon", coordinates: [[[28.1, -25.9], [28.2, -25.9], [28.2, -26]]] },
+  { type: "Polygon", coordinates: [[[28.1, -25.9], [28.2, -25.9], [Number.NaN, -26], [28.1, -25.9]]] },
+  { type: "Polygon", coordinates: [[[28.1, -25.9], [28.2, -25.9], [28.2, -26], [28.15, -25.95]]] },
+]) {
+  assert.equal(parcelGeometry.parseSelectedParcelGeoJSON(malformed), null, "Malformed parcel geometry must be ignored safely");
+}
+assert.equal(parcelGeometry.isGautengCoordinate(-25.974, 28.126), true);
+assert.equal(parcelGeometry.isGautengCoordinate(Number.NaN, 28.126), false);
+assert.equal(parcelGeometry.isGautengCoordinate(-25.974, Number.POSITIVE_INFINITY), false);
+assert.equal(parcelGeometry.isGautengCoordinate(-24.5, 28.126), false);
 
 const spatial = source("apps/web/lib/listing-spatial.ts");
 assert.match(spatial, /export\s+type\s+ListingSpatialSummary/);
@@ -130,16 +152,80 @@ for (const contract of [
 ]) {
   assert.match(map, contract, `ScoutMap is missing ${contract}`);
 }
+assert.match(map, /parseSelectedParcelGeoJSON/, "Selected parcel geometry must be parsed through a validating helper");
+assert.match(map, /getSource\(SELECTED_PARCEL_SOURCE\)/, "Selected parcel source lifecycle must account for an existing source");
+assert.match(map, /removeLayer\(SELECTED_PARCEL_LINE\)/, "Selected parcel line must be removed during cleanup");
+assert.match(map, /removeSource\(SELECTED_PARCEL_SOURCE\)/, "Selected parcel source must be removed during cleanup");
+
+const parcelPage = source("apps/web/app/scout/[id]/page.tsx");
+assert.match(parcelPage, /getListingSpatialSummaries\s*\(\s*actor\.userId/, "Parcel page coordinates must come from the actor-scoped spatial helper");
+assert.match(parcelPage, /<ParcelIntelligence/, "Linked parcel pages must render the live intelligence panel");
+assert.match(parcelPage, /<LinkParcelForm/, "Unlinked listings must retain the parcel-link recovery path");
+assert.match(parcelPage, /actor\.role\s*!==\s*["']Viewer["']/, "The server page must not render Viewer parcel-link mutation UI");
+
+const parcelIntelligence = source("apps/web/app/scout/[id]/_components/ParcelIntelligence.tsx");
+for (const contract of [
+  /AbortController/,
+  /controller\.abort\(\)/,
+  /signal:\s*controller\.signal/,
+  /parseSelectedParcelGeoJSON/,
+  /<ScoutMap/,
+  /selectedParcel=/,
+  /<Massing3D/,
+  /Parcel facts/,
+  /Zoning envelope/,
+  /Dolomite/,
+  /Coverage/,
+  /FAR/,
+  /Max storeys/,
+  /Max footprint/,
+  /Max buildable/,
+  /Max units/,
+  /Amenity scores/,
+  /Forms required/,
+  /Evaluate land/,
+  /Compliance package/,
+]) {
+  assert.match(parcelIntelligence, contract, `Parcel intelligence is missing ${contract}`);
+}
+
+const massing = source("apps/web/app/scout/[id]/_components/Massing3D.tsx");
+for (const contract of [
+  /from\s+["']three["']/,
+  /OrbitControls/,
+  /WebGLRenderer/,
+  /LineDashedMaterial/,
+  /#A5132A/i,
+  /computeLineDistances\(\)/,
+  /matchMedia\(["']\(prefers-reduced-motion: reduce\)["']\)/,
+  /building\.scale\.setScalar\(reducedMotion\s*\?\s*1\s*:\s*0\)/,
+  /requestAnimationFrame/,
+  /cancelAnimationFrame/,
+  /ResizeObserver/,
+  /controls\.dispose\(\)/,
+  /geometry\.dispose\(\)/,
+  /material\.dispose\(\)/,
+  /renderer\.dispose\(\)/,
+  /removeChild/,
+  /massing-fallback/,
+  /role=["']img["']/,
+  /aria-label/,
+]) {
+  assert.match(massing, contract, `Massing3D is missing ${contract}`);
+}
+assert.doesNotMatch(massing, /#E61414/i, "Massing boundaries must never use C-mark red");
 
 const layout = source("apps/web/app/layout.tsx");
 assert.match(layout, /maplibre-gl\/dist\/maplibre-gl\.css/, "The root layout must import packaged MapLibre CSS");
 
 const globals = source("apps/web/app/globals.css");
-for (const className of ["scout-layout", "scout-lead-card", "listing-marker", "floating-lead-chip", "map-legend", "map-fallback"]) {
+for (const className of ["scout-layout", "scout-lead-card", "listing-marker", "floating-lead-chip", "map-legend", "map-fallback", "parcel-detail-layout", "parcel-fact-grid", "massing-shell", "massing-fallback"]) {
   assert.match(globals, new RegExp(`\\.${className}\\b`), `Missing themed ${className} styles`);
 }
 assert.match(globals, /@media\s*\(max-width:\s*860px\)[\s\S]*\.scout-layout/, "Scout must stack at 860px");
 assert.match(globals, /@media\s*\(max-width:\s*360px\)[\s\S]*\.scout-lead-card/, "Scout cards must contain at 320px");
+assert.match(globals, /@media\s*\(max-width:\s*860px\)[\s\S]*\.parcel-detail-layout/, "Parcel detail must stack at 860px");
+assert.match(globals, /@media\s*\(max-width:\s*360px\)[\s\S]*\.parcel-fact-grid/, "Parcel facts must contain at 320px");
 
 console.log("Signature property views contract smoke passed");
 }

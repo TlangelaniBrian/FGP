@@ -10,6 +10,10 @@ import {
   addAccessibleListingMarker,
   restoreCoordinateMarkerSemantics,
 } from "@/lib/scout-marker";
+import {
+  parseSelectedParcelGeoJSON,
+  type SelectedParcelGeoJSON,
+} from "@/lib/parcel-geometry";
 
 const MAP_STYLE: StyleSpecification = {
   version: 8,
@@ -44,11 +48,6 @@ export type ScoutMapListing = {
   longitude: number;
 };
 
-export type SelectedParcelGeoJSON = {
-  type: "Polygon" | "MultiPolygon";
-  coordinates: unknown;
-};
-
 type Coord = { lat: number; lng: number };
 
 function scoreBand(score: number | null): "high" | "medium" | "low" | "unscored" {
@@ -73,10 +72,6 @@ function createListingMarker(
     onListingClick(listing.id);
   });
   return element;
-}
-
-function isSelectedParcelGeoJSON(value: SelectedParcelGeoJSON | null | undefined): value is SelectedParcelGeoJSON {
-  return Boolean(value && (value.type === "Polygon" || value.type === "MultiPolygon") && Array.isArray(value.coordinates));
 }
 
 export function ScoutMap({
@@ -107,6 +102,10 @@ export function ScoutMap({
   const selectedListing = useMemo(
     () => listings.find((listing) => listing.id === selectedListingId) ?? null,
     [listings, selectedListingId],
+  );
+  const selectedParcelGeometry = useMemo(
+    () => parseSelectedParcelGeoJSON(selectedParcel),
+    [selectedParcel],
   );
 
   useEffect(() => { onPickRef.current = onPick; }, [onPick]);
@@ -214,21 +213,34 @@ export function ScoutMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || status !== "ready" || !isSelectedParcelGeoJSON(selectedParcel)) return;
-    map.addSource(SELECTED_PARCEL_SOURCE, {
-      type: "geojson",
-      data: { type: "Feature", properties: {}, geometry: selectedParcel } as GeoJSON.Feature,
-    });
-    map.addLayer({ id: SELECTED_PARCEL_FILL, type: "fill", source: SELECTED_PARCEL_SOURCE, paint: { "fill-color": "#2f70ef", "fill-opacity": 0.16 } });
-    map.addLayer({ id: SELECTED_PARCEL_LINE, type: "line", source: SELECTED_PARCEL_SOURCE, paint: { "line-color": "#0033a0", "line-width": 3 } });
+    if (!map || status !== "ready") return;
+    const geometry = selectedParcelGeometry;
+    if (!geometry) return;
 
-    return () => {
-      if (mapRef.current !== map) return;
+    const removeSelectedParcel = () => {
       if (map.getLayer(SELECTED_PARCEL_LINE)) map.removeLayer(SELECTED_PARCEL_LINE);
       if (map.getLayer(SELECTED_PARCEL_FILL)) map.removeLayer(SELECTED_PARCEL_FILL);
       if (map.getSource(SELECTED_PARCEL_SOURCE)) map.removeSource(SELECTED_PARCEL_SOURCE);
     };
-  }, [selectedParcel, status]);
+
+    try {
+      removeSelectedParcel();
+      map.addSource(SELECTED_PARCEL_SOURCE, {
+        type: "geojson",
+        data: { type: "Feature", properties: {}, geometry } as GeoJSON.Feature,
+      });
+      map.addLayer({ id: SELECTED_PARCEL_FILL, type: "fill", source: SELECTED_PARCEL_SOURCE, paint: { "fill-color": "#2f70ef", "fill-opacity": 0.16 } });
+      map.addLayer({ id: SELECTED_PARCEL_LINE, type: "line", source: SELECTED_PARCEL_SOURCE, paint: { "line-color": "#0033a0", "line-width": 3 } });
+    } catch {
+      removeSelectedParcel();
+      return;
+    }
+
+    return () => {
+      if (mapRef.current !== map) return;
+      removeSelectedParcel();
+    };
+  }, [selectedParcelGeometry, status]);
 
   if (status === "unavailable") {
     return (
@@ -241,17 +253,19 @@ export function ScoutMap({
   }
 
   return (
-    <div className="scout-map-shell" style={{ height }}>
-      <div ref={containerRef} className="scout-map-canvas" role="region" aria-label="Persisted Gauteng listing map" />
+    <div className="scout-map-shell" style={{ height }} data-selected-parcel={selectedParcelGeometry ? "true" : undefined}>
+      <div ref={containerRef} className="scout-map-canvas" role="region" aria-label={selectedParcelGeometry ? "Selected parcel boundary map" : "Persisted Gauteng listing map"} />
       <div className="floating-lead-chip">
         <span className="material-symbols-rounded" aria-hidden="true">location_city</span>
-        {selectedListing?.address || selectedListing?.suburb || `${listings.length} mapped leads`}
+        {selectedListing?.address || selectedListing?.suburb || (selectedParcelGeometry ? "Selected parcel" : `${listings.length} mapped leads`)}
       </div>
       <div className="map-legend" aria-label="Map legend">
-        <span><i className="legend-score-high" />Score ≥ 80</span>
-        <span><i className="legend-score-review" />Score &lt; 80</span>
-        <span><b>RES</b>Zone</span>
-        <span><i className="legend-dolomite" />Dolomite</span>
+        {selectedParcelGeometry ? <span><i className="legend-selected-parcel" />Selected parcel</span> : <>
+          <span><i className="legend-score-high" />Score ≥ 80</span>
+          <span><i className="legend-score-review" />Score &lt; 80</span>
+          <span><b>RES</b>Zone</span>
+          <span><i className="legend-dolomite" />Dolomite</span>
+        </>}
       </div>
       {status === "loading" && <div className="scout-map-loading" role="status">Loading map…</div>}
     </div>
