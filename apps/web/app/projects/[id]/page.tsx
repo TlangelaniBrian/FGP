@@ -8,11 +8,12 @@ import { ContactsTable } from "./_components/ContactsTable";
 import { DecisionLog } from "./_components/DecisionLog";
 import { ProjectActions } from "./_components/ProjectActions";
 import { ProjectDetailEditor } from "./_components/ProjectDetailEditor";
+import { getRequestOrigin } from "@/lib/request-origin";
 
 async function getProject(id: string) {
   const requestHeaders = await headers();
   const cookie = requestHeaders.get("cookie") ?? "";
-  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? `http://${requestHeaders.get("host") ?? "localhost:3000"}`;
+  const origin = getRequestOrigin(requestHeaders);
   const res = await fetch(
     `${origin}/api/projects/${id}`,
     { cache: "no-store", headers: { cookie } }

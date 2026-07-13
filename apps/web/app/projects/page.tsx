@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
+import { getRequestOrigin } from "@/lib/request-origin";
 
 type Project = {
   id: number;
@@ -14,7 +15,7 @@ type Project = {
 async function getProjects(): Promise<Project[]> {
   const requestHeaders = await headers();
   const cookie = requestHeaders.get("cookie") ?? "";
-  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? `http://${requestHeaders.get("host") ?? "localhost:3000"}`;
+  const origin = getRequestOrigin(requestHeaders);
   const res = await fetch(
     `${origin}/api/projects`,
     { cache: "no-store", headers: { cookie } }

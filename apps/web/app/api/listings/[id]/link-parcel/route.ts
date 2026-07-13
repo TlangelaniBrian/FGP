@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, listings } from "@fgp/database";
-import { getAuthenticatedActor } from "@/lib/portal-auth";
+import { requireSessionCapability } from "@/lib/portal-auth";
 import { recordActivity } from "@/lib/activity";
 
 const coordinateSchema = z.object({ lat: z.number().min(-27).max(-25), lng: z.number().min(27).max(29.5) });
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const actor = await getAuthenticatedActor(req);
-  if (!actor) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  const guard = await requireSessionCapability("record", req);
+  if (guard.response) return guard.response;
+  const actor = guard.actor!;
   const listingId = Number((await params).id);
   if (!Number.isInteger(listingId)) return NextResponse.json({ error: "invalid listing id" }, { status: 400 });
   const [listing] = await db.select().from(listings).where(and(eq(listings.id, listingId), eq(listings.userId, actor.userId))).limit(1);

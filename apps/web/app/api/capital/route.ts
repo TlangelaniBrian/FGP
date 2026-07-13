@@ -9,7 +9,7 @@ import { recordActivity } from "@/lib/activity";
 
 async function getGoverningMembers() {
   const rows = await db.select({ name: teamMembers.name, role: teamMembers.role, status: teamMembers.status }).from(teamMembers);
-  return rows.filter((member) => ["Owner", "Chairperson", "Treasurer"].includes(member.role) && !["suspended", "removed"].includes(member.status));
+  return rows.filter((member) => member.status === "active" && member.role !== "Viewer");
 }
 
 export async function GET(req: NextRequest) {

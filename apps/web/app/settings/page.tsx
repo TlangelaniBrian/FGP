@@ -3,44 +3,490 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { actorHeaders } from "@/lib/portal-client";
-import { can, readPortalPreference, team, type Role } from "@/lib/portal-state";
+import { can, type Role } from "@/lib/portal-state";
+import { usePortalActor } from "@/lib/portal-actor";
 
-type Member = { id: number; email: string; name: string; role: Role; status: string };
-type SourceStatus = { source: string; label: string; status: string; detail: string };
-const SOURCES = ["property24", "private_property", "propdata", "gumtree", "immo_africa", "entegral"];
-const SOURCE_LABELS: Record<string, string> = { property24: "Property24", private_property: "Private Property", propdata: "PropData", gumtree: "Gumtree", immo_africa: "Immo Africa", entegral: "Entegral" };
+type Member = {
+  id: number;
+  email: string;
+  name: string;
+  role: Role;
+  status: string;
+};
+type SourceStatus = {
+  source: string;
+  label: string;
+  status: string;
+  detail: string;
+};
+const SOURCES = [
+  "property24",
+  "private_property",
+  "propdata",
+  "gumtree",
+  "immo_africa",
+  "entegral",
+];
+const SOURCE_LABELS: Record<string, string> = {
+  property24: "Property24",
+  private_property: "Private Property",
+  propdata: "PropData",
+  gumtree: "Gumtree",
+  immo_africa: "Immo Africa",
+  entegral: "Entegral",
+};
 
 export default function SettingsPage() {
-  const current = readPortalPreference("fgp_user", team[0]);
+  const actor = usePortalActor();
+  const canEditSettings = can(actor?.role ?? "Viewer", "settings");
+  const canEditTeam = can(actor?.role ?? "Viewer", "team");
   const [saved, setSaved] = useState(false);
   const [autoAnalyze, setAutoAnalyze] = useState(true);
   const [threshold, setThreshold] = useState(75);
   const [whatsapp, setWhatsapp] = useState(true);
   const [weekly, setWeekly] = useState(true);
   const [members, setMembers] = useState<Member[]>([]);
-  const [sourceStatuses, setSourceStatuses] = useState<SourceStatus[]>(SOURCES.map((source) => ({ source, label: SOURCE_LABELS[source], status: "not_run", detail: "No scraper job has run yet." })));
-  const [invite, setInvite] = useState({ name: "", email: "", role: "Viewer" as Role });
+  const [sourceStatuses, setSourceStatuses] = useState<SourceStatus[]>(
+    SOURCES.map((source) => ({
+      source,
+      label: SOURCE_LABELS[source],
+      status: "not_run",
+      detail: "No scraper job has run yet.",
+    })),
+  );
+  const [invite, setInvite] = useState({
+    name: "",
+    email: "",
+    role: "Viewer" as Role,
+  });
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/settings").then((response) => response.ok ? response.json() : null).then((data: { autoAnalyze?: boolean; scoreThreshold?: number; whatsapp?: boolean; weekly?: boolean } | null) => { if (!data) return; if (typeof data.autoAnalyze === "boolean") setAutoAnalyze(data.autoAnalyze); if (typeof data.scoreThreshold === "number") setThreshold(data.scoreThreshold); if (typeof data.whatsapp === "boolean") setWhatsapp(data.whatsapp); if (typeof data.weekly === "boolean") setWeekly(data.weekly); });
-    fetch("/api/team").then((response) => response.ok ? response.json() : []).then(setMembers);
-    fetch("/api/scrape/jobs").then((response) => response.ok ? response.json() : []).then((jobs: Array<{ source: string; status: string; completedAt: string | null; createdAt: string | null; errorMessage: string | null }>) => {
-      const latest = new Map<string, typeof jobs[number]>();
-      for (const job of jobs) if (!latest.has(job.source)) latest.set(job.source, job);
-      setSourceStatuses(SOURCES.map((source) => {
-        const job = latest.get(source);
-        if (!job) return { source, label: SOURCE_LABELS[source], status: "not_run", detail: "No scraper job has run yet." };
-        if (job.status === "failed") return { source, label: SOURCE_LABELS[source], status: "failed", detail: job.errorMessage ?? "The latest job failed." };
-        return { source, label: SOURCE_LABELS[source], status: job.status, detail: job.completedAt ? `Last completed ${new Date(job.completedAt).toLocaleString("en-ZA")}` : "Job is currently running." };
-      }));
-    });
+    fetch("/api/settings")
+      .then((response) => (response.ok ? response.json() : null))
+      .then(
+        (
+          data: {
+            autoAnalyze?: boolean;
+            scoreThreshold?: number;
+            whatsapp?: boolean;
+            weekly?: boolean;
+          } | null,
+        ) => {
+          if (!data) return;
+          if (typeof data.autoAnalyze === "boolean")
+            setAutoAnalyze(data.autoAnalyze);
+          if (typeof data.scoreThreshold === "number")
+            setThreshold(data.scoreThreshold);
+          if (typeof data.whatsapp === "boolean") setWhatsapp(data.whatsapp);
+          if (typeof data.weekly === "boolean") setWeekly(data.weekly);
+        },
+      );
+    fetch("/api/team")
+      .then((response) => (response.ok ? response.json() : []))
+      .then(setMembers);
+    fetch("/api/scrape/jobs")
+      .then((response) => (response.ok ? response.json() : []))
+      .then(
+        (
+          jobs: Array<{
+            source: string;
+            status: string;
+            completedAt: string | null;
+            createdAt: string | null;
+            errorMessage: string | null;
+          }>,
+        ) => {
+          const latest = new Map<string, (typeof jobs)[number]>();
+          for (const job of jobs)
+            if (!latest.has(job.source)) latest.set(job.source, job);
+          setSourceStatuses(
+            SOURCES.map((source) => {
+              const job = latest.get(source);
+              if (!job)
+                return {
+                  source,
+                  label: SOURCE_LABELS[source],
+                  status: "not_run",
+                  detail: "No scraper job has run yet.",
+                };
+              if (job.status === "failed")
+                return {
+                  source,
+                  label: SOURCE_LABELS[source],
+                  status: "failed",
+                  detail: job.errorMessage ?? "The latest job failed.",
+                };
+              return {
+                source,
+                label: SOURCE_LABELS[source],
+                status: job.status,
+                detail: job.completedAt
+                  ? `Last completed ${new Date(job.completedAt).toLocaleString("en-ZA")}`
+                  : "Job is currently running.",
+              };
+            }),
+          );
+        },
+      );
   }, []);
 
-  async function saveSettings() { const response = await fetch("/api/settings", { method: "PUT", headers: actorHeaders(), body: JSON.stringify({ autoAnalyze, scoreThreshold: threshold, whatsapp, weekly }) }); setSaved(response.ok); setMessage(response.ok ? "Settings saved in the workspace database." : "Could not save settings."); }
-  async function inviteMember(event: React.FormEvent) { event.preventDefault(); const response = await fetch("/api/team", { method: "POST", headers: actorHeaders(), body: JSON.stringify(invite) }); const body = await response.json(); if (!response.ok) { setMessage(body.error ?? "Could not invite member"); return; } setMembers((items) => [body, ...items.filter((item) => item.id !== body.id)]); setInvite({ name: "", email: "", role: "Viewer" }); setMessage(`Invite recorded for ${body.email}.`); }
-  async function updateMember(id: number, patch: { role?: Role; status?: string }) { const response = await fetch("/api/team", { method: "PATCH", headers: actorHeaders(), body: JSON.stringify({ id, ...patch }) }); const body = await response.json(); if (response.ok) setMembers((items) => items.map((item) => item.id === id ? body : item)); else setMessage(body.error ?? "Could not update member"); }
-  async function removeMember(member: Member) { if (!window.confirm(`Remove ${member.name} from this workspace?`)) return; const response = await fetch("/api/team", { method: "DELETE", headers: actorHeaders(), body: JSON.stringify({ id: member.id }) }); const body = await response.json(); if (response.ok) { setMembers((items) => items.map((item) => item.id === member.id ? body : item)); setMessage(`${member.name} was removed from the workspace.`); } else setMessage(body.error ?? "Could not remove member"); }
+  async function saveSettings() {
+    const response = await fetch("/api/settings", {
+      method: "PUT",
+      headers: actorHeaders(),
+      body: JSON.stringify({
+        autoAnalyze,
+        scoreThreshold: threshold,
+        whatsapp,
+        weekly,
+      }),
+    });
+    setSaved(response.ok);
+    setMessage(
+      response.ok
+        ? "Settings saved in the workspace database."
+        : "Could not save settings.",
+    );
+  }
+  async function inviteMember(event: React.FormEvent) {
+    event.preventDefault();
+    const response = await fetch("/api/team", {
+      method: "POST",
+      headers: actorHeaders(),
+      body: JSON.stringify(invite),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      setMessage(body.error ?? "Could not invite member");
+      return;
+    }
+    setMembers((items) => [
+      body,
+      ...items.filter((item) => item.id !== body.id),
+    ]);
+    setInvite({ name: "", email: "", role: "Viewer" });
+    setMessage(`Invite recorded for ${body.email}.`);
+  }
+  async function updateMember(
+    id: number,
+    patch: { role?: Role; status?: string },
+  ) {
+    const response = await fetch("/api/team", {
+      method: "PATCH",
+      headers: actorHeaders(),
+      body: JSON.stringify({ id, ...patch }),
+    });
+    const body = await response.json();
+    if (response.ok)
+      setMembers((items) =>
+        items.map((item) => (item.id === id ? body : item)),
+      );
+    else setMessage(body.error ?? "Could not update member");
+  }
+  async function removeMember(member: Member) {
+    if (!window.confirm(`Remove ${member.name} from this workspace?`)) return;
+    const response = await fetch("/api/team", {
+      method: "DELETE",
+      headers: actorHeaders(),
+      body: JSON.stringify({ id: member.id }),
+    });
+    const body = await response.json();
+    if (response.ok) {
+      setMembers((items) =>
+        items.map((item) => (item.id === member.id ? body : item)),
+      );
+      setMessage(`${member.name} was removed from the workspace.`);
+    } else setMessage(body.error ?? "Could not remove member");
+  }
 
-  return <div className="portal-page"><div className="portal-page-head"><div><p className="eyebrow">Admin · Workspace preferences</p><h1 className="page-title">Settings</h1><p className="page-subtitle">Control alerts, data sources, and how new land leads enter the pipeline.</p></div><button className="button button-primary" onClick={saveSettings}>Save settings</button></div>{(saved || message) && <div className="card" style={{ padding: "12px 16px", marginBottom: 16, color: "#16653d", background: "#effaf3", borderColor: "#b9e6c9", fontSize: 12, fontWeight: 800 }}>{message ?? "Settings saved in the workspace database."}</div>}<div className="grid-2"><div className="stack"><section className="card card-pad"><div className="split"><div><span className="card-kicker">Lead automation</span><h2 className="card-title" style={{ marginTop: 6 }}>Scoring preferences</h2></div><span className="tag tag-green">Active</span></div><div className="list-row"><span><strong>Auto-analyse new listings</strong><small>Run spatial checks as soon as a lead is imported.</small></span><button className={`toggle ${autoAnalyze ? "on" : ""}`} aria-label="Toggle auto-analyse" onClick={() => setAutoAnalyze(!autoAnalyze)}><i /></button></div><div style={{ padding: "14px 0" }}><div className="split"><span><strong style={{ fontSize: 13 }}>Minimum score threshold</strong><small className="muted" style={{ display: "block", marginTop: 3, fontSize: 11 }}>Only alert the team for high-signal opportunities.</small></span><strong style={{ color: "#0033a0" }}>{threshold}</strong></div><input type="range" min="50" max="95" value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} style={{ width: "100%", marginTop: 14, accentColor: "#2f70ef" }} /></div></section><section className="card card-pad"><span className="card-kicker">Notifications</span><h2 className="card-title" style={{ marginTop: 6 }}>Stay in the loop</h2><div className="list-row"><span><strong>WhatsApp alerts</strong><small>High-score land and fund activity</small></span><button className={`toggle ${whatsapp ? "on" : ""}`} onClick={() => setWhatsapp(!whatsapp)} aria-label="Toggle WhatsApp alerts"><i /></button></div><div className="list-row"><span><strong>Weekly digest</strong><small>Every Monday at 08:00 SAST</small></span><button className={`toggle ${weekly ? "on" : ""}`} onClick={() => setWeekly(!weekly)} aria-label="Toggle weekly digest"><i /></button></div></section></div><div className="stack"><section className="card card-pad"><div className="split"><div><span className="card-kicker">Data sources</span><h2 className="card-title" style={{ marginTop: 6 }}>Scraper network</h2></div><span className="tag tag-blue">Live job status</span></div>{sourceStatuses.map((source) => <div className="list-row" key={source.source}><span><strong>{source.label}</strong><small>{source.detail}</small></span><span className={`tag ${source.status === "complete" ? "tag-green" : source.status === "failed" ? "tag-red" : "tag-blue"}`}>{source.status === "not_run" ? "Not run" : source.status}</span></div>)}</section><section className="card card-pad"><div className="split"><div><span className="card-kicker">Workspace</span><h2 className="card-title" style={{ marginTop: 6 }}>Team management</h2></div><span className="tag tag-blue">{members.filter((member) => member.status !== "removed").length || 0} members</span></div>{can(current.role as Role, "team") ? <><form onSubmit={inviteMember} className="form-grid" style={{ marginTop: 16 }}><input className="field" placeholder="Full name" value={invite.name} onChange={(event) => setInvite({ ...invite, name: event.target.value })} required /><input className="field" type="email" placeholder="Email" value={invite.email} onChange={(event) => setInvite({ ...invite, email: event.target.value })} required /><select className="field" value={invite.role} onChange={(event) => setInvite({ ...invite, role: event.target.value as Role })}>{["Owner", "Chairperson", "Treasurer", "Analyst", "Viewer"].map((role) => <option key={role}>{role}</option>)}</select><button className="button button-secondary" type="submit">Invite member</button></form>{members.map((member) => <div className="list-row" key={member.id}><span><strong>{member.name}</strong><small>{member.email} · {member.status}</small></span><span className="split">{member.status !== "removed" && <><select className="field" style={{ width: 125, minHeight: 32 }} value={member.role} onChange={(event) => updateMember(member.id, { role: event.target.value as Role })}>{["Owner", "Chairperson", "Treasurer", "Analyst", "Viewer"].map((role) => <option key={role}>{role}</option>)}</select><button className="button button-quiet" style={{ minHeight: 32, padding: "0 9px" }} onClick={() => updateMember(member.id, { status: member.status === "suspended" ? "active" : "suspended" })}>{member.status === "suspended" ? "Restore" : "Suspend"}</button><button className="button button-quiet" style={{ minHeight: 32, padding: "0 9px", color: "#c92d3f" }} onClick={() => removeMember(member)}>Remove</button></>}</span></div>)}</> : <p className="muted" style={{ fontSize: 12 }}>Only the Owner or Chairperson can manage team members.</p>}</section><section className="card card-pad"><p className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>Roles control who can record contributions, update tariffs, edit projects, and co-sign governance changes.</p><Link href="/settings/tariffs" className="button button-quiet" style={{ marginTop: 8 }}>Open tariff administration →</Link></section></div></div></div>;
+  return (
+    <div className="portal-page">
+      <div className="portal-page-head">
+        <div>
+          <p className="eyebrow">Admin · Workspace preferences</p>
+          <h1 className="page-title">Settings</h1>
+          <p className="page-subtitle">
+            Control alerts, data sources, and how new land leads enter the
+            pipeline.
+          </p>
+        </div>
+        {canEditSettings && <button className="button button-primary" onClick={saveSettings}>Save settings</button>}
+      </div>
+      {(saved || message) && (
+        <div
+          className="card"
+          style={{
+            padding: "12px 16px",
+            marginBottom: 16,
+            color: "#16653d",
+            background: "#effaf3",
+            borderColor: "#b9e6c9",
+            fontSize: 12,
+            fontWeight: 800,
+          }}
+        >
+          {message ?? "Settings saved in the workspace database."}
+        </div>
+      )}
+      <div className="grid-2">
+        <div className="stack">
+          <section className="card card-pad">
+            <div className="split">
+              <div>
+                <span className="card-kicker">Lead automation</span>
+                <h2 className="card-title" style={{ marginTop: 6 }}>
+                  Scoring preferences
+                </h2>
+              </div>
+              <span className="tag tag-green">Active</span>
+            </div>
+            <div className="list-row">
+              <span>
+                <strong>Auto-analyse new listings</strong>
+                <small>Run spatial checks as soon as a lead is imported.</small>
+              </span>
+              <button
+                className={`toggle ${autoAnalyze ? "on" : ""}`}
+                aria-label="Toggle auto-analyse"
+                onClick={() => setAutoAnalyze(!autoAnalyze)}
+                disabled={!canEditSettings}
+              >
+                <i />
+              </button>
+            </div>
+            <div style={{ padding: "14px 0" }}>
+              <div className="split">
+                <span>
+                  <strong style={{ fontSize: 13 }}>
+                    Minimum score threshold
+                  </strong>
+                  <small
+                    className="muted"
+                    style={{ display: "block", marginTop: 3, fontSize: 11 }}
+                  >
+                    Only alert the team for high-signal opportunities.
+                  </small>
+                </span>
+                <strong style={{ color: "#0033a0" }}>{threshold}</strong>
+              </div>
+              <input
+                type="range"
+                min="50"
+                max="95"
+                value={threshold}
+                onChange={(event) => setThreshold(Number(event.target.value))}
+                style={{ width: "100%", marginTop: 14, accentColor: "#2f70ef" }}
+                disabled={!canEditSettings}
+              />
+            </div>
+          </section>
+          <section className="card card-pad">
+            <span className="card-kicker">Notifications</span>
+            <h2 className="card-title" style={{ marginTop: 6 }}>
+              Stay in the loop
+            </h2>
+            <div className="list-row">
+              <span>
+                <strong>WhatsApp alerts</strong>
+                <small>High-score land and fund activity</small>
+              </span>
+              <button
+                className={`toggle ${whatsapp ? "on" : ""}`}
+                onClick={() => setWhatsapp(!whatsapp)}
+                aria-label="Toggle WhatsApp alerts"
+                disabled={!canEditSettings}
+              >
+                <i />
+              </button>
+            </div>
+            <div className="list-row">
+              <span>
+                <strong>Weekly digest</strong>
+                <small>Every Monday at 08:00 SAST</small>
+              </span>
+              <button
+                className={`toggle ${weekly ? "on" : ""}`}
+                onClick={() => setWeekly(!weekly)}
+                aria-label="Toggle weekly digest"
+                disabled={!canEditSettings}
+              >
+                <i />
+              </button>
+            </div>
+          </section>
+        </div>
+        <div className="stack">
+          <section className="card card-pad">
+            <div className="split">
+              <div>
+                <span className="card-kicker">Data sources</span>
+                <h2 className="card-title" style={{ marginTop: 6 }}>
+                  Scraper network
+                </h2>
+              </div>
+              <span className="tag tag-blue">Live job status</span>
+            </div>
+            {sourceStatuses.map((source) => (
+              <div className="list-row" key={source.source}>
+                <span>
+                  <strong>{source.label}</strong>
+                  <small>{source.detail}</small>
+                </span>
+                <span
+                  className={`tag ${source.status === "complete" ? "tag-green" : source.status === "failed" ? "tag-red" : "tag-blue"}`}
+                >
+                  {source.status === "not_run" ? "Not run" : source.status}
+                </span>
+              </div>
+            ))}
+          </section>
+          <section className="card card-pad">
+            <div className="split">
+              <div>
+                <span className="card-kicker">Workspace</span>
+                <h2 className="card-title" style={{ marginTop: 6 }}>
+                  Team management
+                </h2>
+              </div>
+              <span className="tag tag-blue">
+                {members.filter((member) => member.status !== "removed")
+                  .length || 0}{" "}
+                members
+              </span>
+            </div>
+            {canEditTeam ? (
+              <>
+                <form
+                  onSubmit={inviteMember}
+                  className="form-grid"
+                  style={{ marginTop: 16 }}
+                >
+                  <input
+                    className="field"
+                    placeholder="Full name"
+                    value={invite.name}
+                    onChange={(event) =>
+                      setInvite({ ...invite, name: event.target.value })
+                    }
+                    required
+                  />
+                  <input
+                    className="field"
+                    type="email"
+                    placeholder="Email"
+                    value={invite.email}
+                    onChange={(event) =>
+                      setInvite({ ...invite, email: event.target.value })
+                    }
+                    required
+                  />
+                  <select
+                    className="field"
+                    value={invite.role}
+                    onChange={(event) =>
+                      setInvite({ ...invite, role: event.target.value as Role })
+                    }
+                  >
+                    {[
+                      "Owner",
+                      "Chairperson",
+                      "Treasurer",
+                      "Analyst",
+                      "Viewer",
+                    ].map((role) => (
+                      <option key={role}>{role}</option>
+                    ))}
+                  </select>
+                  <button className="button button-secondary" type="submit">
+                    Invite member
+                  </button>
+                </form>
+                {members.map((member) => (
+                  <div className="list-row" key={member.id}>
+                    <span>
+                      <strong>{member.name}</strong>
+                      <small>
+                        {member.email} · {member.status}
+                      </small>
+                    </span>
+                    <span className="split">
+                      {member.status !== "removed" && (
+                        <>
+                          <select
+                            className="field"
+                            style={{ width: 125, minHeight: 32 }}
+                            value={member.role}
+                            onChange={(event) =>
+                              updateMember(member.id, {
+                                role: event.target.value as Role,
+                              })
+                            }
+                          >
+                            {[
+                              "Owner",
+                              "Chairperson",
+                              "Treasurer",
+                              "Analyst",
+                              "Viewer",
+                            ].map((role) => (
+                              <option key={role}>{role}</option>
+                            ))}
+                          </select>
+                          <button
+                            className="button button-quiet"
+                            style={{ minHeight: 32, padding: "0 9px" }}
+                            onClick={() =>
+                              updateMember(member.id, {
+                                status:
+                                  member.status === "suspended"
+                                    ? "active"
+                                    : "suspended",
+                              })
+                            }
+                          >
+                            {member.status === "suspended"
+                              ? "Restore"
+                              : "Suspend"}
+                          </button>
+                          <button
+                            className="button button-quiet"
+                            style={{
+                              minHeight: 32,
+                              padding: "0 9px",
+                              color: "#c92d3f",
+                            }}
+                            onClick={() => removeMember(member)}
+                          >
+                            Remove
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <p className="muted" style={{ fontSize: 12 }}>
+                Only the Owner or Chairperson can manage team members.
+              </p>
+            )}
+          </section>
+          <section className="card card-pad">
+            <p className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>
+              Roles control who can record contributions, update tariffs, edit
+              projects, and co-sign governance changes.
+            </p>
+            <Link
+              href="/settings/tariffs"
+              className="button button-quiet"
+              style={{ marginTop: 8 }}
+            >
+              Open tariff administration →
+            </Link>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
 }
