@@ -17,6 +17,7 @@
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.98.0",
     "drizzle-orm": "^0.45.2",
+    "maplibre-gl": "4.7.1",
     "material-symbols": "^0.45.7",
     "next": "16.1.6",
     "react": "19.2.3",

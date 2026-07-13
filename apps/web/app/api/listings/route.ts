@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db, listings } from "@fgp/database";
 import { getAuthenticatedActor, requireSessionCapability } from "@/lib/portal-auth";
 import { recordActivity } from "@/lib/activity";
+import { getListingSpatialSummaries } from "@/lib/listing-spatial";
 
 export async function GET(req: NextRequest) {
   const actor = await getAuthenticatedActor(req);
@@ -17,7 +18,13 @@ export async function GET(req: NextRequest) {
   if (query) filters.push(or(ilike(listings.address, `%${query}%`), ilike(listings.suburb, `%${query}%`))!);
   if (status) filters.push(eq(listings.status, status));
   const rows = await db.select().from(listings).where(and(...filters)).orderBy(desc(listings.feasibilityScore), desc(listings.createdAt)).limit(100);
-  return NextResponse.json(rows);
+  const spatialByListingId = await getListingSpatialSummaries(actor.userId, rows.map((row) => row.id));
+  return NextResponse.json(rows.map((row) => ({
+    ...row,
+    latitude: spatialByListingId.get(row.id)?.latitude ?? null,
+    longitude: spatialByListingId.get(row.id)?.longitude ?? null,
+    yieldAt85OccPct: spatialByListingId.get(row.id)?.yieldAt85OccPct ?? null,
+  })));
 }
 
 const listingSchema = z.object({ address: z.string().min(2).max(500), municipality: z.enum(["johannesburg", "tshwane", "ekurhuleni"]), sizeSqm: z.number().min(100), price: z.number().positive(), sourceUrl: z.string().url().optional(), description: z.string().max(5000).optional() });

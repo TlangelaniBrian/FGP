@@ -1,26 +1,45 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { ScoutMap } from "./_components/ScoutMap";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ParcelDetail } from "./_components/ParcelDetail";
+import { ScoutLeadCard, type ScoutListing } from "./_components/ScoutLeadCard";
+import { ScoutMap, type ScoutMapListing } from "./_components/ScoutMap";
 import type { ParcelAnalysis } from "@/lib/parcel";
 import { formatZar } from "@/lib/format";
 
 type Coord = { lat: number; lng: number };
-type Listing = { id: number; address: string | null; suburb: string | null; municipality: string | null; sizeSqm: string | null; price: string | null; zoneCode: string | null; dolomiteRisk: string | null; feasibilityScore: number | null; status: string | null };
+type ScoutFilter = "all" | "res2" | "res3" | "res4" | "low-dolomite" | "score-80";
+
+const FILTERS: Array<{ value: ScoutFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "res2", label: "RES2" },
+  { value: "res3", label: "RES3" },
+  { value: "res4", label: "RES4" },
+  { value: "low-dolomite", label: "Low dolomite" },
+  { value: "score-80", label: "Score ≥ 80" },
+];
 
 // Gauteng-ish bounds; mirror the worker/proxy guards so we fail fast client-side.
-const LAT_MIN = -27, LAT_MAX = -25, LNG_MIN = 27, LNG_MAX = 29.5;
-const inBounds = (c: Coord) =>
-  c.lat >= LAT_MIN && c.lat <= LAT_MAX && c.lng >= LNG_MIN && c.lng <= LNG_MAX;
+const LAT_MIN = -27;
+const LAT_MAX = -25;
+const LNG_MIN = 27;
+const LNG_MAX = 29.5;
+const inBounds = (coord: Coord) => coord.lat >= LAT_MIN && coord.lat <= LAT_MAX && coord.lng >= LNG_MIN && coord.lng <= LNG_MAX;
 
 function errorMessage(payload: unknown, status: number): string {
   if (payload && typeof payload === "object" && "error" in payload) {
-    const e = (payload as { error: unknown }).error;
-    if (typeof e === "string") return e;
-    if (e) return JSON.stringify(e);
+    const error = (payload as { error: unknown }).error;
+    if (typeof error === "string") return error;
+    if (error) return JSON.stringify(error);
   }
   return `Request failed (HTTP ${status}).`;
+}
+
+function matchesFilter(listing: ScoutListing, filter: ScoutFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "low-dolomite") return listing.dolomiteRisk?.toLowerCase() === "low";
+  if (filter === "score-80") return (listing.feasibilityScore ?? -1) >= 80;
+  return listing.zoneCode?.toLowerCase() === filter;
 }
 
 export default function ScoutPage() {
@@ -30,11 +49,66 @@ export default function ScoutPage() {
   const [data, setData] = useState<ParcelAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [listings, setListings] = useState<ScoutListing[]>([]);
+  const [listingsLoading, setListingsLoading] = useState(true);
+  const [listingsError, setListingsError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [listingStatus, setListingStatus] = useState("all");
+  const [activeFilter, setActiveFilter] = useState<ScoutFilter>("all");
+  const [selectedListingId, setSelectedListingId] = useState<number | null>(null);
 
-  useEffect(() => { fetch("/api/listings").then((response) => response.ok ? response.json() : []).then(setListings).catch(() => setListings([])); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/listings")
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Could not load listings (HTTP ${response.status}).`);
+        return await response.json() as ScoutListing[];
+      })
+      .then((rows) => {
+        if (!cancelled) setListings(Array.isArray(rows) ? rows : []);
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) {
+          setListings([]);
+          setListingsError(reason instanceof Error ? reason.message : "Could not load persisted listings.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setListingsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const filteredListings = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return listings.filter((listing) => {
+      const searchable = [listing.address, listing.suburb, listing.municipality, listing.zoneCode, listing.dolomiteRisk]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return (!normalizedQuery || searchable.includes(normalizedQuery)) && matchesFilter(listing, activeFilter);
+    });
+  }, [activeFilter, listings, query]);
+
+  const mapListings = useMemo<ScoutMapListing[]>(() => filteredListings.flatMap((listing) => (
+    listing.latitude === null || listing.longitude === null
+      ? []
+      : [{
+          id: listing.id,
+          address: listing.address,
+          suburb: listing.suburb,
+          zoneCode: listing.zoneCode,
+          dolomiteRisk: listing.dolomiteRisk,
+          feasibilityScore: listing.feasibilityScore,
+          latitude: listing.latitude,
+          longitude: listing.longitude,
+        }]
+  )), [filteredListings]);
+
+  useEffect(() => {
+    if (selectedListingId !== null && !filteredListings.some((listing) => listing.id === selectedListingId)) {
+      setSelectedListingId(null);
+    }
+  }, [filteredListings, selectedListingId]);
 
   const analyze = useCallback(async (coord: Coord) => {
     if (!inBounds(coord)) {
@@ -45,22 +119,18 @@ export default function ScoutPage() {
     setError(null);
     setData(null);
     try {
-      const res = await fetch("/api/parcel", {
+      const response = await fetch("/api/parcel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(coord),
       });
-      if (!res.ok) {
+      if (!response.ok) {
         let payload: unknown = null;
-        try {
-          payload = await res.json();
-        } catch {
-          /* non-JSON */
-        }
-        setError(errorMessage(payload, res.status));
+        try { payload = await response.json(); } catch { /* non-JSON response */ }
+        setError(errorMessage(payload, response.status));
         return;
       }
-      setData((await res.json()) as ParcelAnalysis);
+      setData(await response.json() as ParcelAnalysis);
     } catch {
       setError("Could not reach the server. Check your connection and try again.");
     } finally {
@@ -68,69 +138,120 @@ export default function ScoutPage() {
     }
   }, []);
 
-  // Map click → drop marker, fill inputs, analyze.
-  const handlePick = useCallback(
-    (coord: Coord) => {
-      setMarker(coord);
-      setLatInput(coord.lat.toFixed(6));
-      setLngInput(coord.lng.toFixed(6));
-      analyze(coord);
-    },
-    [analyze]
-  );
+  const handlePick = useCallback((coord: Coord) => {
+    setMarker(coord);
+    setSelectedListingId(null);
+    setLatInput(coord.lat.toFixed(6));
+    setLngInput(coord.lng.toFixed(6));
+    void analyze(coord);
+  }, [analyze]);
 
-  function handleManualSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const lat = parseFloat(latInput);
-    const lng = parseFloat(lngInput);
+  const handleListingSelect = useCallback((listingId: number) => {
+    setSelectedListingId(listingId);
+    const listing = mapListings.find((item) => item.id === listingId);
+    if (listing) {
+      setMarker({ lat: listing.latitude, lng: listing.longitude });
+      setLatInput(listing.latitude.toFixed(6));
+      setLngInput(listing.longitude.toFixed(6));
+    }
+  }, [mapListings]);
+
+  function handleManualSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const lat = Number.parseFloat(latInput);
+    const lng = Number.parseFloat(lngInput);
     if (Number.isNaN(lat) || Number.isNaN(lng)) {
       setError("Enter valid numeric coordinates.");
       return;
     }
     const coord = { lat, lng };
     setMarker(coord);
-    analyze(coord);
+    setSelectedListingId(null);
+    void analyze(coord);
   }
-
-  const field =
-    "bg-bg-surface border border-border rounded-card px-3 py-2 text-text-primary font-mono text-sm w-full focus:outline-none focus:border-accent-blue";
 
   return (
     <div className="portal-page">
-      <div>
-        <p className="eyebrow">Scout · Gauteng lead discovery</p>
-        <h1 className="page-title">Find the next viable parcel</h1>
-        <p className="page-subtitle">
-          Click the map or enter a coordinate to resolve zoning, dolomite risk, building envelope and amenity scores.
-        </p>
+      <div className="portal-page-head">
+        <div>
+          <p className="eyebrow">Scout · Gauteng lead discovery</p>
+          <h1 className="page-title">Scout</h1>
+          <p className="page-subtitle">Search persisted opportunities, compare signals and inspect their exact map positions.</p>
+        </div>
+        <span className="tag tag-blue">{listings.length} listings</span>
       </div>
 
-      <section className="card card-pad" style={{ marginBottom: 18 }}><div className="split"><div><span className="card-kicker">Persisted leads</span><h2 className="card-title" style={{ marginTop: 6 }}>Scout pipeline</h2></div><span className="tag tag-blue">{listings.length} listings</span></div><div className="split" style={{ marginTop: 16 }}><input className="field" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search suburb or address" /><select className="field" style={{ maxWidth: 180, marginLeft: 10 }} value={listingStatus} onChange={(event) => setListingStatus(event.target.value)}><option value="all">All statuses</option><option value="new">New</option><option value="analyzed">Analysed</option><option value="active_project">Project</option></select></div>{listings.filter((listing) => listingStatus === "all" || listing.status === listingStatus).filter((listing) => `${listing.address ?? ""} ${listing.suburb ?? ""}`.toLowerCase().includes(query.toLowerCase())).slice(0, 6).map((listing) => <div className="list-row" key={listing.id}><span><strong>{listing.address ?? "Untitled listing"}</strong><small>{listing.suburb ?? listing.municipality ?? "Gauteng"} · {listing.sizeSqm ? `${Number(listing.sizeSqm).toLocaleString("en-ZA")} m²` : "Size pending"} · {listing.price ? formatZar(Number(listing.price)) : "Price pending"}</small></span><span className="split"><span className="tag tag-blue">{listing.zoneCode ?? "Unmatched"}</span>{listing.feasibilityScore != null && <span className="score-ring"><span>{listing.feasibilityScore}</span></span>}<Link href={`/scout/${listing.id}`} className="button button-quiet" style={{ minHeight: 30, padding: "0 9px" }}>Open</Link></span></div>)}{listings.length === 0 && <p className="muted" style={{ margin: "16px 0 0", fontSize: 12 }}>No persisted listings yet. Save an evaluation or import a listing to start the pipeline.</p>}</section>
-      <ScoutMap marker={marker} onPick={handlePick} />
+      <label className="scout-search">
+        <span className="material-symbols-rounded" aria-hidden="true">search</span>
+        <span className="sr-only">Search listings</span>
+        <input
+          className="field"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search by suburb, address, zone or dolomite"
+        />
+      </label>
 
-      <form onSubmit={handleManualSubmit} className="flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-[140px]">
-          <label className="text-[10px] font-mono text-text-muted tracking-widest uppercase mb-1 block">Latitude</label>
-          <input value={latInput} onChange={(e) => setLatInput(e.target.value)} placeholder="-25.99" className={field} />
-        </div>
-        <div className="flex-1 min-w-[140px]">
-          <label className="text-[10px] font-mono text-text-muted tracking-widest uppercase mb-1 block">Longitude</label>
-          <input value={lngInput} onChange={(e) => setLngInput(e.target.value)} placeholder="28.13" className={field} />
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="portal-transition bg-accent-blue text-white font-mono text-sm font-semibold px-5 py-2 rounded-card disabled:opacity-50 hover:opacity-90"
-        >
-          {loading ? "Analysing…" : "Analyse"}
-        </button>
-      </form>
+      <div className="scout-filter-tabs" role="group" aria-label="Filter persisted listings">
+        {FILTERS.map((filter) => (
+          <button
+            key={filter.value}
+            type="button"
+            className={activeFilter === filter.value ? "is-active" : undefined}
+            aria-pressed={activeFilter === filter.value}
+            onClick={() => setActiveFilter(filter.value)}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
 
-      {error && (
-        <div role="alert" className="border border-accent-red/40 bg-accent-red/10 text-accent-red rounded-card px-3 py-2 text-xs font-mono">
-          {error}
-        </div>
-      )}
+      <div className="scout-layout">
+        <section className="scout-leads" aria-labelledby="scout-results-heading">
+          <div className="scout-results-heading">
+            <h2 id="scout-results-heading">Persisted leads</h2>
+            <span>{filteredListings.length} of {listings.length} listings</span>
+          </div>
+          {listingsLoading && <p className="scout-empty" role="status">Loading persisted listings…</p>}
+          {listingsError && <p className="scout-empty status-banner-warning" role="alert">{listingsError}</p>}
+          {!listingsLoading && !listingsError && filteredListings.length === 0 && (
+            <p className="scout-empty">No listings match this search and filter.</p>
+          )}
+          {filteredListings.map((listing) => (
+            <ScoutLeadCard
+              key={listing.id}
+              listing={listing}
+              selected={listing.id === selectedListingId}
+              onSelect={handleListingSelect}
+              formatPrice={formatZar}
+            />
+          ))}
+        </section>
+
+        <aside className="scout-map-column" aria-label="Lead map and coordinate analysis">
+          <ScoutMap
+            marker={marker}
+            onPick={handlePick}
+            listings={mapListings}
+            selectedListingId={selectedListingId}
+            onListingClick={handleListingSelect}
+          />
+          <form onSubmit={handleManualSubmit} className="card card-pad scout-coordinate-form">
+            <div>
+              <label className="field-label" htmlFor="scout-latitude">Latitude</label>
+              <input id="scout-latitude" value={latInput} onChange={(event) => setLatInput(event.target.value)} placeholder="-25.990000" className="field" inputMode="decimal" />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="scout-longitude">Longitude</label>
+              <input id="scout-longitude" value={lngInput} onChange={(event) => setLngInput(event.target.value)} placeholder="28.130000" className="field" inputMode="decimal" />
+            </div>
+            <button type="submit" disabled={loading} className="button button-primary">
+              {loading ? "Analysing…" : "Analyse coordinate"}
+            </button>
+          </form>
+          {error && <div role="alert" className="card card-pad status-banner-warning">{error}</div>}
+        </aside>
+      </div>
 
       {data && <ParcelDetail data={data} />}
     </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "material-symbols/rounded.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 import { AppShell } from "./_components/AppShell";
 import { db, projects } from "@fgp/database";
