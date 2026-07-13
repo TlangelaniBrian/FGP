@@ -139,7 +139,7 @@ async function createWorkspaceRecord(table, values) {
 async function seedViewerWorkspace(userId) {
   const project = await createWorkspaceRecord("projects", { user_id: userId, name: `Viewer project ${runId}`, notes: "original" });
   const listing = await createWorkspaceRecord("listings", { user_id: userId, source: "manual", address: `Viewer listing ${runId}`, description: "original" });
-  const report = await createWorkspaceRecord("feasibility_reports", { user_id: userId, listing_id: listing.id, unit_type: "1bed", target_units: 1, viability_notes: "original" });
+  const report = await createWorkspaceRecord("feasibility_reports", { user_id: userId, listing_id: listing.id, unit_type: "1bed", target_units: 1, actual_units: 1, viability_notes: "original" });
   const document = await createWorkspaceRecord("compliance_documents", { user_id: userId, listing_id: listing.id, report_id: report.id, doc_type: "zoning_certificate", municipality: "original", status: "ready" });
   const scrapeJob = await createWorkspaceRecord("scrape_jobs", { user_id: userId, source: "property24", status: "queued", error_message: "original" });
   const budget = await createWorkspaceRecord("project_budget_items", { project_id: project.id, category: "general", item: `Viewer budget ${runId}`, notes: "original" });
@@ -150,7 +150,7 @@ async function seedViewerWorkspace(userId) {
   return [
     { table: "projects", row: project, field: "notes", insert: { user_id: userId, name: `Viewer insert project ${runId}` } },
     { table: "listings", row: listing, field: "description", insert: { user_id: userId, source: "manual", address: `Viewer insert listing ${runId}` } },
-    { table: "feasibility_reports", row: report, field: "viability_notes", insert: { user_id: userId, listing_id: listing.id, unit_type: "1bed", target_units: 2 } },
+    { table: "feasibility_reports", row: report, field: "viability_notes", insert: { user_id: userId, listing_id: listing.id, unit_type: "1bed", target_units: 2, actual_units: 2 } },
     { table: "compliance_documents", row: document, field: "municipality", insert: { user_id: userId, listing_id: listing.id, doc_type: "motivation_letter" } },
     { table: "scrape_jobs", row: scrapeJob, field: "error_message", insert: { user_id: userId, source: "property24" } },
     { table: "project_budget_items", row: budget, field: "notes", insert: { project_id: project.id, category: "general", item: `Viewer insert budget ${runId}` } },

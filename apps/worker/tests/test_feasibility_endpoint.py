@@ -1,6 +1,9 @@
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from main import app
+from routers import feasibility
 
 client = TestClient(app)
 
@@ -42,7 +45,7 @@ def test_feasibility_size_too_small():
     assert resp.status_code == 422
 
 
-def test_feasibility_accepts_luxury_and_explicit_tariff_year():
+def test_feasibility_rejects_missing_non_2026_tariff_bundle():
     payload = {
         **VALID_PAYLOAD,
         "unit_type": "luxury",
@@ -56,7 +59,18 @@ def test_feasibility_accepts_luxury_and_explicit_tariff_year():
     }
     resp = client.post("/analyze/feasibility", json=payload)
 
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["tariff_year"] == 2027
-    assert data["cost_build"] == 8 * 120 * 18_500
+    assert resp.status_code == 422
+    assert "tariff" in resp.json()["detail"].lower()
+
+
+def test_capacity_response_model_requires_all_named_components():
+    CapacityResponse = feasibility.CapacityResponse
+    FeasibilityResponse = feasibility.FeasibilityResponse
+    assert set(CapacityResponse.model_fields) == {
+        "density_units",
+        "far_units",
+        "footprint_storey_units",
+    }
+    with pytest.raises(ValidationError):
+        CapacityResponse(density_units=None, far_units=10)
+    assert FeasibilityResponse.model_fields["capacity"].annotation is CapacityResponse

@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from services.calculations import calculate_feasibility_score
 from services.tariffs import (
     Tariffs,
@@ -20,6 +22,16 @@ def test_default_tariffs_shape():
     assert t.professional_fee_pct == 0.12
     # Top bracket has no upper bound.
     assert math.isinf(t.transfer_duty_brackets[-1][0])
+
+
+def test_non_2026_year_cannot_be_relabelled_with_2026_fallback():
+    with pytest.raises(ValueError, match="2026"):
+        default_tariffs(2027)
+
+
+def test_non_2026_partial_tariff_bundle_is_rejected():
+    with pytest.raises(ValueError, match="complete"):
+        tariffs_from_rows(2027, {"build_rates": {"bachelor": 14_000}})
 
 
 def test_tariffs_from_rows_parses_db_jsonb():

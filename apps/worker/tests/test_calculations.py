@@ -190,3 +190,25 @@ def test_missing_zoning_evidence_prevents_definitive_viability():
     assert result["max_footprint_sqm"] is None
     assert result["max_buildable_sqm"] is None
     assert "zoning" in result["viability_notes"].lower()
+
+
+def test_all_null_zoning_row_is_not_authoritative_evidence():
+    result = calculate_feasibility_score(
+        land_price=1,
+        size_sqm=5_000,
+        unit_type="2bed",
+        target_units=30,
+        municipality="johannesburg",
+        zone_rules={
+            "coverage_pct": None,
+            "far": None,
+            "max_storeys": None,
+            "max_units_per_erf": None,
+            "max_units_per_ha": None,
+        },
+    )
+
+    assert result["decision_status"] == "degraded"
+    assert result["zoning_evidence_available"] is False
+    assert result["viable"] is False
+    assert result["max_units_allowed"] is None

@@ -57,6 +57,15 @@
 - [x] Add category-specific tariff validation and update workflow fixtures to canonical save inputs.
 - [x] Run the complete Task 3 GREEN verification matrix, self-review, report, and local commit.
 
+## Task 3 independent review remediation (2026-07-13)
+
+- [x] Capture RED for non-2026 tariff completeness, null zoning evidence, typed capacity, and durable report evidence.
+- [x] Restrict fallback tariffs to 2026 and reject missing or partial later-year bundles.
+- [x] Require usable zoning constraints before returning a definitive decision.
+- [x] Persist actual units, decision/evidence state, and capacity components atomically.
+- [x] Apply the trusted-decision migration and run the full GREEN matrix.
+- [x] Append the Task 3 report, self-review, and commit locally without audit artifacts.
+
 ## Review
 
 Implemented the shared Capitec-style shell, route-aware navigation, visual
@@ -82,6 +91,11 @@ recomputes every saved decision through the worker inside an atomic database
 transaction, exposes evidence-aware capacity limits without sentinel values,
 supports luxury units and explicit tariff years, and rejects semantically invalid
 tariff writes before they reach storage.
+
+The independent-review remediation restricts hard-coded tariff fallback to its
+real 2026 vintage, rejects incomplete later-year bundles, treats empty zoning
+rows as degraded evidence, and persists actual units plus structured capacity
+and decision-evidence fields so stored costs remain auditable.
 
 Verification: `supabase migration up --local`, live capital API read/write,
 Viewer 403 checks for capital/settings/tariffs, `pnpm --filter web typecheck`,

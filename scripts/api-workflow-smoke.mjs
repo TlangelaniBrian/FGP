@@ -9,6 +9,7 @@ assert(anonKey, "NEXT_PUBLIC_SUPABASE_ANON_KEY is required");
 assert(serviceKey, "SUPABASE_SERVICE_ROLE_KEY is required");
 
 const { runId, marker, email, secondaryEmail, actorName } = createRunIdentity(process.env.FGP_WORKFLOW_RUN_ID);
+const workflowZoneCode = `SMK${runId.replace(/[^a-z0-9]/gi, "").slice(-12)}`.toUpperCase();
 const password = "WorkflowTest123!";
 let userId;
 let secondaryMemberId;
@@ -71,6 +72,10 @@ async function reconcileRecords() {
     const rows = await supabase(`/rest/v1/capital_contributions?member_name=eq.${encodeURIComponent(actorName)}&note=eq.${encodeURIComponent(marker)}&select=id`);
     rows.forEach((row) => track("capital_contributions", row));
   }]);
+  tasks.push(["reconcile zoning rule", async () => {
+    const rows = await supabase(`/rest/v1/zoning_scheme_rules?municipality=eq.johannesburg&zone_code=eq.${workflowZoneCode}&select=id`);
+    rows.forEach((row) => track("zoning_scheme_rules", row));
+  }]);
 
   await attemptAll([
     ["reconcile user and marker records", () => attemptAll(tasks)],
@@ -91,7 +96,7 @@ async function reconcileRecords() {
 async function cleanupRecords() {
   const order = [
     "compliance_documents", "project_checkins", "project_budget_items", "project_contacts", "project_decisions", "milestones",
-    "projects", "feasibility_reports", "listings", "scrape_jobs", "capital_contributions",
+    "projects", "feasibility_reports", "listings", "scrape_jobs", "capital_contributions", "zoning_scheme_rules",
   ];
   const records = [...createdRecords]
     .filter(({ table }) => table !== "team_members")
@@ -206,11 +211,14 @@ try {
   assert.equal(auth.ok, true, JSON.stringify(authPayload));
   const token = authPayload.access_token;
 
+  const zoningRule = await supabase("/rest/v1/zoning_scheme_rules", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ municipality: "johannesburg", zone_code: workflowZoneCode, coverage_pct: 60, far: 1.5, max_storeys: 3, max_units_per_ha: 80 }) });
+  track("zoning_scheme_rules", zoningRule[0]);
+
   let result = await api("/api/listings", token, { method: "POST", body: JSON.stringify({ address: `Workflow Smoke Stand ${marker}`, municipality: "johannesburg", sizeSqm: 720, price: 1250000, description: marker }) });
   assert.equal(result.response.status, 201, JSON.stringify(result.payload));
   listingId = track("listings", result.payload).id;
 
-  const canonicalFeasibility = { address: `Workflow Smoke Stand ${marker}`, municipality: "johannesburg", zone_code: "RES3", size_sqm: 720, price: 1250000, unit_type: "1bed", target_units: 8, tariff_year: 2026 };
+  const canonicalFeasibility = { address: `Workflow Smoke Stand ${marker}`, municipality: "johannesburg", zone_code: workflowZoneCode, size_sqm: 720, price: 1250000, unit_type: "1bed", target_units: 8, tariff_year: 2026 };
   const forgedAddress = `Forged Workflow Smoke Stand ${marker}`;
   result = await api("/api/feasibility/save", token, { method: "POST", body: JSON.stringify({ ...canonicalFeasibility, address: forgedAddress, viable: true, score: 100, cost_total: 1, yield_at_85_occ_pct: 999, viability_notes: marker, dolomite_risk: "LOW" }) });
   assert.equal(result.response.status, 422, JSON.stringify(result.payload));
@@ -231,11 +239,25 @@ try {
   reportId = result.payload.reportId;
   track("listings", { id: listingId });
   track("feasibility_reports", { id: reportId });
-  const [savedReport] = await supabase(`/rest/v1/feasibility_reports?id=eq.${reportId}&select=viable,cost_total,yield_at_85_occ_pct,viability_notes,tariff_year`);
+  const [savedReport] = await supabase(`/rest/v1/feasibility_reports?id=eq.${reportId}&select=viable,cost_total,cost_build,yield_at_85_occ_pct,viability_notes,tariff_year,target_units,actual_units,decision_status,zoning_evidence_available,capacity_density_units,capacity_far_units,capacity_footprint_storey_units`);
   assert.notEqual(Number(savedReport.cost_total), 1, "saved report persisted forged total cost");
   assert.notEqual(Number(savedReport.yield_at_85_occ_pct), 999, "saved report persisted forged yield");
   assert.notEqual(savedReport.viability_notes, marker, "saved report persisted forged notes");
   assert.equal(savedReport.tariff_year, 2026);
+  assert.equal(savedReport.target_units, 8);
+  assert.equal(savedReport.actual_units, 5);
+  assert.equal(savedReport.decision_status, "definitive");
+  assert.equal(savedReport.zoning_evidence_available, true);
+  assert.equal(savedReport.capacity_density_units, 5);
+  assert.equal(savedReport.capacity_far_units, 19);
+  assert.equal(savedReport.capacity_footprint_storey_units, 23);
+  assert.equal(Number(savedReport.cost_build), 5 * 55 * 14200);
+
+  const missingTariffAddress = `Missing Tariff Workflow ${marker}`;
+  result = await api("/api/feasibility/save", token, { method: "POST", body: JSON.stringify({ ...canonicalFeasibility, address: missingTariffAddress, tariff_year: 2030 }) });
+  assert.equal(result.response.status, 422, JSON.stringify(result.payload));
+  const missingTariffListings = await supabase(`/rest/v1/listings?address=eq.${encodeURIComponent(missingTariffAddress)}&select=id`);
+  assert.deepEqual(missingTariffListings, [], "missing non-2026 tariffs created a definitive report");
 
   result = await api(`/api/listings/${listingId}/link-parcel`, token, { method: "POST", body: JSON.stringify({ lat: -25.976, lng: 28.13 }) });
   assert.equal(result.response.status, 200, JSON.stringify(result.payload));

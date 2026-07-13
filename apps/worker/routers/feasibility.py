@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from services.calculations import calculate_feasibility_score
 from services.rate_limit import is_rate_limited
-from services.tariffs import load_tariffs
+from services.tariffs import TariffValidationError, load_tariffs
 
 router = APIRouter(prefix="/analyze", tags=["feasibility"])
 
@@ -46,6 +46,12 @@ class FeasibilityRequest(BaseModel):
         return v.upper()
 
 
+class CapacityResponse(BaseModel):
+    density_units: int | None
+    far_units: int | None
+    footprint_storey_units: int | None
+
+
 class FeasibilityResponse(BaseModel):
     viable: bool
     decision_status: Literal["definitive", "degraded"]
@@ -56,7 +62,7 @@ class FeasibilityResponse(BaseModel):
     actual_units: int
     max_units_allowed: int | None
     rezoning_required: bool
-    capacity: dict[str, int | None]
+    capacity: CapacityResponse
     max_footprint_sqm: float | None
     max_buildable_sqm: float | None
     cost_land: float
@@ -87,7 +93,10 @@ async def analyze_feasibility(
         rules = body.zone_rules.model_dump(exclude_none=True)
 
     # DB-backed tariffs for the requested year, falling back to constants.
-    tariffs = load_tariffs(body.tariff_year)
+    try:
+        tariffs = load_tariffs(body.tariff_year)
+    except TariffValidationError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
     return calculate_feasibility_score(
         land_price=body.price,

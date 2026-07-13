@@ -79,7 +79,6 @@ def calculate_feasibility_score(
     unit_sqm = t.unit_sizes[unit_type]
     build_rate = t.build_rates[unit_type]
 
-    zoning_evidence_available = bool(zone_rules)
     rules = zone_rules or {}
     coverage_raw = rules.get("coverage_pct")
     far_raw = rules.get("far")
@@ -105,6 +104,7 @@ def calculate_feasibility_score(
     available_limits = [
         limit for limit in (density_units, far_units, footprint_storey_units) if limit is not None
     ]
+    zoning_evidence_available = bool(available_limits)
     max_units_calc = min(available_limits) if available_limits else None
 
     actual_units = min(target_units, max_units_calc) if max_units_calc is not None else target_units
