@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
@@ -20,4 +20,8 @@ export default function LoginPage() {
     router.replace(next); router.refresh();
   }
   return <main className="auth-page"><div className="auth-card"><div className="brand-lockup"><div className="brand-mark">⌂</div><div><strong>First Generation</strong><span>PROPERTIES</span></div></div><p className="eyebrow" style={{ marginTop: 28 }}>Secure workspace</p><h1 className="page-title" style={{ fontSize: 28 }}>Sign in to FGP</h1><p className="page-subtitle">Use your team account to access land analysis, project records, and capital governance.</p><form onSubmit={submit} style={{ marginTop: 24 }}><label className="field-label">Email<input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></label><label className="field-label" style={{ marginTop: 14 }}>Password<input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" /></label>{visibleError && <p className="field-error">{visibleError}</p>}<button className="button button-primary" style={{ width: "100%", marginTop: 20 }} disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button></form></div></main>;
+}
+
+export default function LoginPage() {
+  return <Suspense><LoginForm /></Suspense>;
 }
