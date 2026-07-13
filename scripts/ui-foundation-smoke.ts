@@ -63,6 +63,10 @@ async function main(): Promise<void> {
   assert.match(appShell, /useState<VisualDirection>\(["']classic["']\)/, "AppShell direction state must render deterministically as classic");
   assert.doesNotMatch(appShell, /useState<(?:ColourMode|VisualDirection)>\([^)]*readPortalPreference/, "AppShell state initializers must not read browser storage");
   assert.match(appShell, /useEffect\([\s\S]*readColourModePreference\(\)[\s\S]*readVisualDirectionPreference\(\)/, "AppShell must load validated preferences after mount");
+  assert.match(appShell, /appearanceReady/, "AppShell must gate preference-dependent UI until validated preferences are adopted");
+  assert.match(appShell, /data-mode=\{appearanceReady\s*\?\s*colourMode\s*:\s*undefined\}/, ".portal-app must not expose a stale colour-mode attribute before appearance readiness");
+  assert.match(appShell, /data-dir=\{appearanceReady\s*\?\s*visualDirection\s*:\s*undefined\}/, ".portal-app must not expose a stale direction attribute before appearance readiness");
+  assert.doesNotMatch(appShell, /queueMicrotask/, "Appearance adoption must not add a second stale-state paint via a queued microtask");
 
   const rootLayout = source("apps/web/app/layout.tsx");
   assert.match(rootLayout, /suppressHydrationWarning/, "Root layout must tolerate the validated pre-paint preference attributes");
@@ -109,6 +113,8 @@ async function main(): Promise<void> {
   assert.match(colourModeControl, /aria-label=["']Dark colour mode["']/, "The colour-mode button must have a stable accessible name");
   assert.match(colourModeControl, /<PortalIcon\b[\s\S]*\/?>/, "The colour-mode button must contain PortalIcon");
   assert.match(portalChrome, /\bColourMode\b/, "PortalChrome must type the colour-mode control with ColourMode");
+  assert.match(portalChrome, /appearanceReady\s*\?/, "PortalChrome must hide preference-dependent controls until appearance readiness");
+  assert.match(portalChrome, /appearance-controls-placeholder/, "PortalChrome must reserve control dimensions while appearance preferences become ready");
 
   const darkTokens = blocksAfter(globals, /\[data-mode=["']?dark["']?\]\s*(?=\{)/)[0];
   assert.ok(darkTokens, "globals.css must define a dark-mode token block");
@@ -141,6 +147,32 @@ async function main(): Promise<void> {
     /\.portal-grid-2[\s\S]*grid-template-columns:\s*1fr|\.portal-grid-2\s*,[\s\S]*grid-template-columns:\s*1fr/,
     "Portal grids must stack to one column at 860px",
   );
+  assert.match(responsivePortalGrids, /\.portal-toolbar\s*\{[^}]*flex-wrap:\s*wrap/s, "The narrow portal toolbar must intentionally wrap its controls");
+  assert.match(responsivePortalGrids, /\.mode-switch\s*\{[^}]*flex(?:-basis|:)\s*:\s*100%/s, "The narrow direction selector must receive a complete row");
+  assert.match(globals, /\.portal-page[^{}]*\{[^}]*min-width:\s*0/s, ".portal-page must opt out of intrinsic-width overflow");
+  assert.match(globals, /\.card[^{}]*\{[^}]*min-width:\s*0/s, "Cards must opt out of intrinsic-width overflow");
+  assert.match(globals, /\.grid-2[^{}]*\{[^}]*min-width:\s*0/s, "Dense two-column grids must opt out of intrinsic-width overflow");
+  assert.match(responsivePortalGrids, /\.split[^{}]*\{[^}]*flex-wrap:\s*wrap/s, "Dense split rows must wrap at the portal breakpoint");
+  assert.match(responsivePortalGrids, /\.list-row[^{}]*\{[^}]*flex-wrap:\s*wrap/s, "Dense list rows must wrap at the portal breakpoint");
+
+  const semanticStatusConsumers = [
+    "apps/web/app/settings/page.tsx",
+    "apps/web/app/settings/tariffs/page.tsx",
+    "apps/web/app/capital/page.tsx",
+  ];
+  for (const relativePath of semanticStatusConsumers) {
+    const consumer = source(relativePath);
+    assert.doesNotMatch(consumer, /#(?:0033a0|16653d|effaf3|b9e6c9|fff8ea|f0d59d|845300|6d7885)/i, `${relativePath} must use semantic status and ink tokens instead of listed light-only colours`);
+  }
+  for (const relativePath of ["apps/web/app/scout/[id]/page.tsx", "apps/web/app/scout/[id]/_components/LinkParcelForm.tsx"]) {
+    assert.doesNotMatch(source(relativePath), /#(?:6d7885|16834b|effaf3|b9e6c9|4c6656)/i, `${relativePath} must not leak representative hard-coded neutral/status colours`);
+  }
+  assert.match(globals, /--status-success-(?:surface|ink|line)\s*:/, "globals.css must define semantic success status tokens");
+  assert.match(globals, /--status-warning-(?:surface|ink|line)\s*:/, "globals.css must define semantic warning status tokens");
+  assert.match(darkTokens, /--status-success-(?:surface|ink|line)\s*:/, "Dark mode must override semantic success status tokens");
+  assert.match(darkTokens, /--status-warning-(?:surface|ink|line)\s*:/, "Dark mode must override semantic warning status tokens");
+  assert.match(globals, /\.status-banner-success\s*\{/, "globals.css must expose a semantic success banner class");
+  assert.match(globals, /\.status-banner-warning\s*\{/, "globals.css must expose a semantic warning banner class");
 
   const gridConsumers: Record<string, string[]> = {
     "apps/web/app/page.tsx": ["portal-grid-2"],
@@ -206,6 +238,11 @@ async function main(): Promise<void> {
   assert.ok(reducedMotion, "globals.css must define a reduced-motion override");
   assert.match(reducedMotion, /animation\s*:\s*none\b/, "Reduced motion must disable animation");
   assert.match(reducedMotion, /transition\s*:\s*none\b/, "Reduced motion must disable nonessential transitions");
+
+  const taskReport = source(".superpowers/sdd/task-5-report.md");
+  assert.match(taskReport, /canonical Capitec C-mark SVG[^\n]*byte-identical/i, "Task 5 report must document the canonical SVG byte-identity exception");
+  assert.match(taskReport, /git diff --check[^\n]*--[^\n]*:\(exclude\)apps\/web\/public\/brand\/capitec-c-mark\.svg/, "Task 5 report must record the exact scoped diff-check command");
+  assert.doesNotMatch(taskReport, /`git diff --check`\s*\|\s*PASS/i, "Task 5 report must not claim an unqualified git diff --check pass");
 
   console.log("UI foundation contract smoke passed");
 }

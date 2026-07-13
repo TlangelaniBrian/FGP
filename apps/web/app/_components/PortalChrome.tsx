@@ -20,11 +20,12 @@ const labels: Record<string, string> = {
 type PortalChromeProps = {
   colourMode: ColourMode;
   visualDirection: VisualDirection;
+  appearanceReady: boolean;
   onColourModeChange: (mode: ColourMode) => void;
   onVisualDirectionChange: (direction: VisualDirection) => void;
 };
 
-export function PortalChrome({ colourMode, visualDirection, onColourModeChange, onVisualDirectionChange }: PortalChromeProps) {
+export function PortalChrome({ colourMode, visualDirection, appearanceReady, onColourModeChange, onVisualDirectionChange }: PortalChromeProps) {
   const pathname = usePathname();
   const actor = usePortalActor();
   const [open, setOpen] = useState<"user" | "notifications" | null>(null);
@@ -40,6 +41,7 @@ export function PortalChrome({ colourMode, visualDirection, onColourModeChange, 
       <header className="portal-topbar">
         <div className="portal-crumbs"><span>First Generation</span><PortalIcon name="chevron_right" className="crumb-chevron" /><strong>{crumb}</strong></div>
         <div className="portal-toolbar">
+          {appearanceReady ? <>
           <div className="mode-switch" role="group" aria-label="Visual direction">
             {(["classic", "navy", "bold"] as VisualDirection[]).map((item) => (
               <button
@@ -70,6 +72,10 @@ export function PortalChrome({ colourMode, visualDirection, onColourModeChange, 
           >
             <PortalIcon name={colourMode === "dark" ? "light_mode" : "dark_mode"} />
           </button>
+          </> : <div className="appearance-controls-placeholder" aria-hidden="true">
+            <div className="mode-switch"><button tabIndex={-1}>classic</button><button tabIndex={-1}>navy</button><button tabIndex={-1}>bold</button></div>
+            <span className="icon-button colour-mode-button"><PortalIcon name="dark_mode" /></span>
+          </div>}
           <button className="icon-button" aria-label="Toggle notifications" onClick={() => setOpen(open === "notifications" ? null : "notifications")}><PortalIcon name="notifications" /><span className="notification-dot" /></button>
           <div className="popover-anchor">
             <button className="user-trigger" aria-label="Open account menu" onClick={() => setOpen(open === "user" ? null : "user")}>

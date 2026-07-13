@@ -137,13 +137,10 @@ export default function TariffsAdminPage() {
 
       {!canEdit && (
         <div
-          className="card"
+          className="card status-banner-warning"
           style={{
             padding: "12px 16px",
             marginBottom: 16,
-            background: "#fff8ea",
-            borderColor: "#f0d59d",
-            color: "#845300",
             fontSize: 12,
             fontWeight: 800,
           }}

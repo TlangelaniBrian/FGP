@@ -215,13 +215,10 @@ export default function SettingsPage() {
       </div>
       {(saved || message) && (
         <div
-          className="card"
+          className="card status-banner-success"
           style={{
             padding: "12px 16px",
             marginBottom: 16,
-            color: "#16653d",
-            background: "#effaf3",
-            borderColor: "#b9e6c9",
             fontSize: 12,
             fontWeight: 800,
           }}
@@ -268,7 +265,7 @@ export default function SettingsPage() {
                     Only alert the team for high-signal opportunities.
                   </small>
                 </span>
-                <strong style={{ color: "#0033a0" }}>{threshold}</strong>
+                <strong className="status-value">{threshold}</strong>
               </div>
               <input
                 type="range"
@@ -276,7 +273,7 @@ export default function SettingsPage() {
                 max="95"
                 value={threshold}
                 onChange={(event) => setThreshold(Number(event.target.value))}
-                style={{ width: "100%", marginTop: 14, accentColor: "#2f70ef" }}
+                style={{ width: "100%", marginTop: 14, accentColor: "var(--blue)" }}
                 disabled={!canEditSettings}
               />
             </div>
@@ -434,7 +431,7 @@ export default function SettingsPage() {
                             ))}
                           </select>
                           <button
-                            className="button button-quiet"
+                            className="button button-quiet button-danger"
                             style={{ minHeight: 32, padding: "0 9px" }}
                             onClick={() =>
                               updateMember(member.id, {
@@ -454,7 +451,6 @@ export default function SettingsPage() {
                             style={{
                               minHeight: 32,
                               padding: "0 9px",
-                              color: "#c92d3f",
                             }}
                             onClick={() => removeMember(member)}
                           >

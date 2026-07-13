@@ -18,19 +18,19 @@ export function AppShell({ actor, projects, children }: { actor: PortalActor | n
   const pathname = usePathname();
   const [colourMode, setColourMode] = useState<ColourMode>("light");
   const [visualDirection, setVisualDirection] = useState<VisualDirection>("classic");
+  const [appearanceReady, setAppearanceReady] = useState(false);
 
   useEffect(() => {
     const savedColourMode = readColourModePreference();
     const savedVisualDirection = readVisualDirectionPreference();
     document.documentElement.dataset.mode = savedColourMode;
     document.documentElement.dataset.dir = savedVisualDirection;
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (cancelled) return;
+    const adoptionTimer = window.setTimeout(() => {
       setColourMode(savedColourMode);
       setVisualDirection(savedVisualDirection);
-    });
-    return () => { cancelled = true; };
+      setAppearanceReady(true);
+    }, 0);
+    return () => window.clearTimeout(adoptionTimer);
   }, []);
 
   function handleColourModeChange(nextMode: ColourMode) {
@@ -45,12 +45,13 @@ export function AppShell({ actor, projects, children }: { actor: PortalActor | n
 
   if (pathname === "/login") return <PortalActorProvider actor={actor}>{children}</PortalActorProvider>;
   return <PortalActorProvider actor={actor}>
-    <div className="portal-app" data-mode={colourMode} data-dir={visualDirection}>
+    <div className="portal-app" data-mode={appearanceReady ? colourMode : undefined} data-dir={appearanceReady ? visualDirection : undefined}>
       <Sidebar projects={projects} />
       <div className="portal-main">
         <PortalChrome
           colourMode={colourMode}
           visualDirection={visualDirection}
+          appearanceReady={appearanceReady}
           onColourModeChange={handleColourModeChange}
           onVisualDirectionChange={handleVisualDirectionChange}
         />

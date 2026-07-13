@@ -352,13 +352,10 @@ export default function CapitalPage() {
       </div>
       {message && (
         <div
-          className="card"
+          className="card status-banner-success"
           style={{
             padding: "12px 16px",
             marginBottom: 16,
-            color: "#16653d",
-            background: "#effaf3",
-            borderColor: "#b9e6c9",
             fontSize: 12,
             fontWeight: 800,
           }}
@@ -525,17 +522,15 @@ export default function CapitalPage() {
             )}
             {goalProposal && (
               <div
-                className="card"
+                className="card status-banner-warning"
                 style={{
                   padding: 12,
                   marginTop: 14,
-                  background: "#fff8ea",
-                  borderColor: "#f0d59d",
                   fontSize: 11,
                 }}
               >
                 <strong>Awaiting unanimous co-sign</strong>
-                <p style={{ margin: "4px 0 0", color: "#6d7885" }}>
+                <p className="muted" style={{ margin: "4px 0 0" }}>
                   {formatZar(Number(goalProposal.newAmount))} proposed by{" "}
                   {goalProposal.proposedBy}. {goalProposal.approvals.length} of{" "}
                   {governance.requiredMembers.length} signatures recorded.

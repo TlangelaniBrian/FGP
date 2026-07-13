@@ -70,7 +70,7 @@ export default function ZoningPage({ params }: { params: Promise<{ id: string }>
 
   return <div className="portal-page">
     <div className="portal-page-head"><div><p className="eyebrow">Listing {id} · Compliance</p><h1 className="page-title">Zoning and forms</h1><p className="page-subtitle">{listing ? `${listing.zoneCode ?? "Zone pending"} · ${listing.municipality ?? "Municipality pending"} · Status tracked in the compliance workspace.` : "Loading persisted listing context…"}</p></div><Link href={`/scout/${id}`} className="button button-quiet">← Back to listing</Link></div>
-    {message && <div className="card" style={{ padding: "12px 16px", marginBottom: 16, color: "#16653d", background: "#effaf3", borderColor: "#b9e6c9", fontSize: 12, fontWeight: 800 }}>{message}</div>}
+    {message && <div className="card status-banner-success" style={{ padding: "12px 16px", marginBottom: 16, fontSize: 12, fontWeight: 800 }}>{message}</div>}
     <div className="grid-2">
       <section className="card card-pad">
         <div className="split"><div><span className="card-kicker">Application checklist</span><h2 className="card-title" style={{ marginTop: 6 }}>Keep the file moving</h2></div><span className="tag tag-blue">{readyCount} ready or filed</span></div>

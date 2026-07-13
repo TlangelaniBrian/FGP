@@ -34,7 +34,7 @@ export default async function ParcelPage({ params }: { params: Promise<{ id: str
       <div className="stat-grid" style={{ marginBottom: 18 }}>
         <div className="card stat-card">
           <span className="card-kicker">Scout score</span>
-          <div className="stat-value">{score ?? "—"}<span style={{ fontSize: 14, color: "#6d7885" }}>{score == null ? "" : "/100"}</span></div>
+          <div className="stat-value">{score ?? "—"}<span className="muted" style={{ fontSize: 14 }}>{score == null ? "" : "/100"}</span></div>
           <div className="stat-note">{scoreLabel}</div>
         </div>
         <div className="card stat-card">
@@ -49,7 +49,7 @@ export default async function ParcelPage({ params }: { params: Promise<{ id: str
         </div>
         <div className="card stat-card">
           <span className="card-kicker">Dolomite</span>
-          <div className="stat-value" style={{ color: listing.dolomiteRisk === "LOW" ? "#16834b" : undefined }}>{listing.dolomiteRisk ?? "—"}</div>
+          <div className={`stat-value ${listing.dolomiteRisk === "LOW" ? "status-ink-success" : ""}`}>{listing.dolomiteRisk ?? "—"}</div>
           <div className="stat-note">{price == null ? "Price pending" : formatZar(price)}</div>
         </div>
       </div>
