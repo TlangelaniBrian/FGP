@@ -15,13 +15,29 @@ export async function middleware(request: NextRequest) {
   });
   const { data: { user } } = await supabase.auth.getUser();
   const pathname = request.nextUrl.pathname;
-  if (!user && pathname !== "/login" && !pathname.startsWith("/_next") && !pathname.startsWith("/api/")) {
+  const isPageRequest = !pathname.startsWith("/_next") && !pathname.startsWith("/api/");
+  const { data: isActiveMember } = user
+    ? await supabase.rpc("fgp_is_active_member")
+    : { data: false };
+
+  if (!user && pathname !== "/login" && isPageRequest) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }
-  if (user && pathname === "/login") return NextResponse.redirect(new URL("/", request.url));
+  if (user && !isActiveMember && pathname !== "/login" && isPageRequest) {
+    await supabase.auth.signOut();
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.search = "";
+    loginUrl.searchParams.set("error", "membership_required");
+    loginUrl.searchParams.set("next", pathname);
+    const denied = NextResponse.redirect(loginUrl);
+    response.cookies.getAll().forEach((cookie) => denied.cookies.set(cookie));
+    return denied;
+  }
+  if (user && isActiveMember && pathname === "/login") return NextResponse.redirect(new URL("/", request.url));
   return response;
 }
 

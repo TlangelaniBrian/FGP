@@ -86,3 +86,55 @@ This is persisted scraper/auto-analysis settings state outside Task 1, not an id
 - The full authenticated workflow smoke is not green because of the unrelated scraper status assertion above.
 - Browser verification for Owner controls, Viewer read-only controls, and stale-site-URL project rendering remains outstanding.
 - Prettier expanded formatting in the Capital, Settings, and Tariffs client pages while applying the role-gate edits; semantics remain scoped, and typecheck/lint are clean, but the diff is larger than ideal.
+
+## Review remediation (2026-07-13)
+
+### RED
+
+The focused smoke was extended before the review fixes. A single run reported all security regressions and exited 1:
+
+```text
+RED Viewer mutation controls: LinkParcelForm.tsx does not resolve the authenticated actor
+RED direct PostgREST active-member boundary: non-member directly read the unique portal setting
+RED protected page active-member boundary: non-member protected page returned 200, expected 307
+RED stable goal approval IDs: stored display name instead of the Owner userId
+RED stable correction approval IDs: stored display name instead of the Owner userId
+AssertionError: 5 security regression checks failed
+```
+
+### Fixes
+
+- Added migration `0015_active_member_workspace_boundary.sql`, which introduces the fail-closed `fgp_is_active_member()` RLS predicate and applies it to workspace membership, settings, capital, activity, owned records, scraper jobs, project details, and milestones. Active Viewers retain read access. Pending legacy name-based approval arrays are reset.
+- Applied the migration successfully to the local Supabase database through `docker exec -i supabase_db_FGP psql ...` after the host lacked `psql`.
+- Middleware now checks active membership via the database predicate, redirects non-active identities to `/login?error=membership_required`, clears their session, and leaves a usable denied message/sign-in path. Active members alone are redirected away from login.
+- Parcel linking, scraper queue/run controls, and feasibility save/project controls now resolve `usePortalActor()` and omit mutations for Viewers.
+- Goal and correction approvals now persist authenticated `userId` values. Goal unanimity compares every active non-Viewer member's stable user ID; names are display-only in the UI.
+- Request-origin construction now validates host/protocol and ignores untrusted forwarded hosts unless they match the incoming host or configured origin, while still preferring the incoming host over a stale configured URL.
+
+### GREEN
+
+Fresh required checks after the final code change:
+
+```text
+pnpm test:auth-roles
+exit 0: Authenticated role smoke passed: RLS, page boundary, Viewer controls, stable approvals, and cleanup asserted.
+
+pnpm --filter web typecheck
+exit 0: tsc --noEmit
+
+pnpm --filter web lint
+exit 0: eslint
+
+git diff --check
+exit 0
+```
+
+The existing authenticated workflow was rerun once and still fails at its previously observed, unrelated scraper-state assertion:
+
+```text
+scripts/api-workflow-smoke.mjs:102
+actual: 'new'
+expected: 'analyzed'
+```
+
+No workflow production behavior was changed to mask that failure.

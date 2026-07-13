@@ -3,12 +3,16 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFeasibilityStore } from "@/lib/feasibility-store";
 import { actorHeaders } from "@/lib/portal-client";
+import { usePortalActor } from "@/lib/portal-actor";
+import { can } from "@/lib/portal-state";
 
 const fmt = (n: number) => `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 const pct = (n: number) => `${n.toFixed(1)}%`;
 
 export default function EvaluateResultPage() {
   const router = useRouter();
+  const actor = usePortalActor();
+  const canEdit = can(actor?.role ?? "Viewer", "record");
   const { result, formValues, clear } = useFeasibilityStore();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ listingId: number; reportId: number } | null>(null);
@@ -131,7 +135,7 @@ export default function EvaluateResultPage() {
       <p className="text-text-muted font-mono text-xs">{result.viabilityNotes}</p>
 
       <div className="flex gap-3">
-        {!saved ? (
+        {canEdit && (!saved ? (
           <button
             onClick={keep}
             disabled={saving}
@@ -141,7 +145,7 @@ export default function EvaluateResultPage() {
           </button>
         ) : (
           <div><p className="text-accent-green font-mono text-sm">Saved — report #{saved.reportId}</p>{!project ? <div style={{ display: "flex", gap: 8, marginTop: 10 }}><input className="field" value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="Project name" aria-label="Project name" /><button className="button button-secondary" onClick={createProject}>Create project</button></div> : <p className="text-accent-green font-mono text-xs mt-2">Project created: <a href={`/projects/${project.id}`}>{project.name}</a></p>}{projectError && <p className="text-accent-red font-mono text-xs mt-1">{projectError}</p>}</div>
-        )}
+        ))}
         <button
           onClick={() => { clear(); router.push("/evaluate"); }}
           className="border border-border text-text-muted hover:text-text-primary font-mono text-sm px-6 py-2.5 rounded-card transition-colors"

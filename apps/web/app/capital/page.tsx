@@ -27,8 +27,8 @@ type Correction = {
   proposedAmount: string | null;
 };
 type Governance = {
-  requiredMembers: string[];
-  members: Array<{ name: string; role: string; status: string }>;
+  requiredMembers: Array<{ userId: string; name: string; role: string; status: string }>;
+  members: Array<{ userId: string; name: string; role: string; status: string }>;
 };
 
 export default function CapitalPage() {
@@ -429,7 +429,7 @@ export default function CapitalPage() {
                     </small>
                   </span>
                   {can(actor?.role ?? "Viewer", "cosign") &&
-                    !proposal.approvals.includes(actor?.name ?? "") && (
+                    !proposal.approvals.includes(actor?.userId ?? "") && (
                     <button
                       className="button button-secondary"
                       onClick={() => approveCorrection(proposal)}
@@ -501,18 +501,18 @@ export default function CapitalPage() {
                   {governance.requiredMembers.map((member) => (
                     <div
                       className="split"
-                      key={member}
+                      key={member.userId}
                       style={{ fontSize: 11, padding: "3px 0" }}
                     >
-                      <span>{member}</span>
+                      <span>{member.name}</span>
                       <span
                         className={
-                          goalProposal.approvals.includes(member)
+                          goalProposal.approvals.includes(member.userId)
                             ? "tag tag-green"
                             : "tag tag-amber"
                         }
                       >
-                        {goalProposal.approvals.includes(member)
+                        {goalProposal.approvals.includes(member.userId)
                           ? "Signed"
                           : "Pending"}
                       </span>
@@ -520,7 +520,7 @@ export default function CapitalPage() {
                   ))}
                 </div>
                 {can(actor?.role ?? "Viewer", "cosign") &&
-                  !goalProposal.approvals.includes(actor?.name ?? "") && (
+                  !goalProposal.approvals.includes(actor?.userId ?? "") && (
                   <button
                     className="button button-secondary"
                     style={{ marginTop: 10 }}
@@ -578,14 +578,14 @@ export default function CapitalPage() {
                 {governance.requiredMembers.map((member) => (
                   <span
                     className={
-                      proposal.approvals.includes(member)
+                      proposal.approvals.includes(member.userId)
                         ? "tag tag-green"
                         : "tag tag-amber"
                     }
-                    key={`${proposal.id}-${member}`}
+                    key={`${proposal.id}-${member.userId}`}
                   >
-                    {member.split(" ")[0]}:{" "}
-                    {proposal.approvals.includes(member) ? "✓" : "…"}
+                    {member.name.split(" ")[0]}:{" "}
+                    {proposal.approvals.includes(member.userId) ? "✓" : "…"}
                   </span>
                 ))}
               </span>
