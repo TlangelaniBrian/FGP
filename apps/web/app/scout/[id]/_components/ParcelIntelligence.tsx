@@ -7,6 +7,10 @@ import type { ParcelAnalysis } from "@/lib/parcel";
 import { parseSelectedParcelGeoJSON } from "@/lib/parcel-geometry";
 import { ScoutMap, type ScoutMapListing } from "../../_components/ScoutMap";
 import { Massing3D } from "./Massing3D";
+import {
+  buildParcelIntelligenceView,
+  type OwnedListingFact,
+} from "./parcel-intelligence-view";
 
 interface ParcelIntelligenceProps {
   listingId: number;
@@ -26,6 +30,17 @@ function metric(value: number | null | undefined, suffix = ""): string {
 
 function Fact({ label, value }: { label: string; value: string }) {
   return <div className="parcel-fact"><dt>{label}</dt><dd>{value}</dd></div>;
+}
+
+function OwnedListingFacts({ facts }: { facts: OwnedListingFact[] }) {
+  return (
+    <section className="card">
+      <header className="parcel-card-head"><h2>Owned listing facts</h2></header>
+      <dl className="parcel-fact-grid parcel-degraded-facts">
+        {facts.map((fact) => <Fact key={fact.label} label={fact.label} value={fact.value} />)}
+      </dl>
+    </section>
+  );
 }
 
 function Score({ label, value }: { label: string; value: number | null | undefined }) {
@@ -101,27 +116,43 @@ export function ParcelIntelligence(props: ParcelIntelligenceProps) {
     latitude: props.latitude,
     longitude: props.longitude,
   }], [analysis, props.address, props.latitude, props.listingId, props.longitude, props.suburb]);
+  const view = useMemo(() => buildParcelIntelligenceView({
+    requestStatus: status,
+    analysisFound: analysis?.found ?? null,
+    ownedListing: {
+      address: props.address,
+      suburb: props.suburb,
+      sizeSqm: props.sizeSqm,
+      price: props.price,
+    },
+  }), [analysis?.found, props.address, props.price, props.sizeSqm, props.suburb, status]);
 
-  if (status === "loading") {
+  if (view.mode === "loading") {
     return <section className="card parcel-intelligence-state" role="status">Loading live parcel intelligence…</section>;
   }
 
-  if (status === "error") {
+  if (view.mode === "error") {
     return (
-      <section className="card card-pad status-banner-warning" role="alert">
-        <strong>Live parcel intelligence is unavailable</strong>
-        <p>{error}</p>
-        <p>The actor-owned listing facts remain available. Refresh to retry the spatial analysis.</p>
-      </section>
+      <div className="stack parcel-degraded-state">
+        <section className="card card-pad status-banner-warning" role="alert">
+          <strong>Live parcel intelligence is unavailable</strong>
+          <p>{error}</p>
+          <p>The actor-owned listing facts remain available. Refresh to retry the spatial analysis.</p>
+        </section>
+        {view.showOwnedFacts && <OwnedListingFacts facts={view.ownedFacts} />}
+      </div>
     );
   }
 
-  if (!analysis?.found) {
+  if (view.mode === "not-found" || !analysis?.found) {
     return (
-      <section className="card card-pad status-banner-warning" role="status">
-        <strong>No mapped parcel found</strong>
-        <p>This owned listing has a valid coordinate, but the current spatial layers did not return a parcel or zoning match.</p>
-      </section>
+      <div className="stack parcel-degraded-state">
+        <section className="card card-pad status-banner-warning" role="status">
+          <strong>No mapped parcel found</strong>
+          <p>This owned listing has a valid coordinate, but the current spatial layers did not return a parcel or zoning match.</p>
+        </section>
+        {view.showOwnedFacts && <OwnedListingFacts facts={view.ownedFacts} />}
+      </div>
     );
   }
 

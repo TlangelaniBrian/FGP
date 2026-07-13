@@ -92,6 +92,30 @@ assert.equal(parcelGeometry.isGautengCoordinate(Number.NaN, 28.126), false);
 assert.equal(parcelGeometry.isGautengCoordinate(-25.974, Number.POSITIVE_INFINITY), false);
 assert.equal(parcelGeometry.isGautengCoordinate(-24.5, 28.126), false);
 
+const intelligenceViewPath = path.join(root, "apps/web/app/scout/[id]/_components/parcel-intelligence-view.ts");
+assert.ok(existsSync(intelligenceViewPath), "Parcel intelligence must expose an executable pure degraded-state and owned-facts helper");
+const intelligenceView = await import(pathToFileURL(intelligenceViewPath).href);
+const ownedListing = {
+  address: "ERF 1247, Noordwyk Ext 19",
+  suburb: "Noordwyk",
+  sizeSqm: 1024,
+  price: 980000,
+};
+const expectedOwnedFacts = [
+  { label: "Address", value: "ERF 1247, Noordwyk Ext 19 · Noordwyk" },
+  { label: "Land size", value: "1 024 m²" },
+  { label: "Price", value: "R 980 000.00" },
+  { label: "Price / m²", value: "R 957.03" },
+];
+const errorView = intelligenceView.buildParcelIntelligenceView({ requestStatus: "error", analysisFound: null, ownedListing });
+assert.equal(errorView.mode, "error");
+assert.equal(errorView.showOwnedFacts, true, "Non-2xx/error mode must retain actor-owned listing facts");
+assert.deepEqual(errorView.ownedFacts, expectedOwnedFacts, "Error facts must include address, size, exact price and derived price/m²");
+const noMatchView = intelligenceView.buildParcelIntelligenceView({ requestStatus: "ready", analysisFound: false, ownedListing });
+assert.equal(noMatchView.mode, "not-found");
+assert.equal(noMatchView.showOwnedFacts, true, "found:false mode must retain actor-owned listing facts");
+assert.deepEqual(noMatchView.ownedFacts, expectedOwnedFacts, "No-match facts must include address, size, exact price and derived price/m²");
+
 const spatial = source("apps/web/lib/listing-spatial.ts");
 assert.match(spatial, /export\s+type\s+ListingSpatialSummary/);
 assert.match(spatial, /ST_Y\s*\(\s*l\.coordinates::geometry\s*\)/i, "Latitude must be derived server-side with ST_Y");
@@ -185,6 +209,8 @@ for (const contract of [
   /Forms required/,
   /Evaluate land/,
   /Compliance package/,
+  /buildParcelIntelligenceView/,
+  /OwnedListingFacts/,
 ]) {
   assert.match(parcelIntelligence, contract, `Parcel intelligence is missing ${contract}`);
 }

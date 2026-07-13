@@ -125,6 +125,71 @@ removed; the fixture state/script and controlled fault were removed; browser
 viewport/tabs were finalized; and both 3001/8001 processes were stopped and
 absence-checked.
 
+## Independent review correction — degraded owned facts
+
+The independent review RED identified that both the worker-error and
+`{ found: false }` branches returned before the trusted actor-owned facts were
+rendered. The correction isolates an executable view-state/fact builder and
+renders its address/suburb, land size, exact price and derived price/m² beneath
+both degraded banners.
+
+The new executable assertion was proved RED by temporarily forcing
+`showOwnedFacts: false`; `pnpm test:signature-views` exited 1 with the exact
+regression signal:
+
+```text
+AssertionError [ERR_ASSERTION]: Non-2xx/error mode must retain actor-owned listing facts
+false !== true
+```
+
+After restoring the production predicate (`mode !== "loading"`), the same
+command exited 0:
+
+```text
+Signature property views contract smoke passed
+```
+
+Fresh correction gates were GREEN:
+
+- `pnpm test:signature-views` — PASS.
+- `pnpm test:ui-foundation` — PASS.
+- `pnpm --filter web typecheck` — PASS.
+- `pnpm --filter web lint` — PASS.
+- production-environment `pnpm --filter web build` — PASS, 26/26 pages.
+- `apps/worker/.venv/bin/python -m pytest tests` — PASS, 40/40.
+- authenticated `pnpm test:api:workflow` on exact 3001/8001 — PASS with cleanup.
+- authenticated `pnpm test:auth-roles` on exact 3001 — PASS with cleanup.
+- `git diff --check` — PASS.
+
+Production runtime listener ownership was rechecked before browser evidence:
+3001 resolved to this worktree's `apps/web`, and 8001 resolved to this
+worktree's `apps/worker`. A real authenticated Owner fixture then proved both
+controlled degraded branches in dark mode at 1440×1000 and 320×900:
+
+- Worker unavailable: the `Live parcel intelligence is unavailable` alert and
+  `Worker unreachable — is the FastAPI service running?` message remained with
+  `Fallback facts parcel · Edge Gauteng`, `1 024 m²`, `R 980 000.00`, and
+  `R 957.03`.
+- Worker `{ found: false }`: the `No mapped parcel found` status remained with
+  the same four exact owned facts.
+- Both branches had `documentElement.clientWidth === scrollWidth` at 1440 and
+  320; the 320px degraded root was contained at x=16..304 and each fact at
+  x=31..289.
+- App-origin console errors were zero. Chrome emitted only an unrelated
+  extension error.
+
+After restoring the worker and adding a uniquely marked PostGIS parcel/zoning/
+rule/dolomite fixture around the same owned coordinate, the ready view returned
+with no degraded banner, zone `T6B251`, 60% coverage, FAR 1.5, 3 storeys,
+614 m² footprint, 1 536 m² buildable, 12 units, one selected parcel, one
+MapLibre canvas, one Three.js `massing-canvas`, zero massing fallbacks, no
+overflow at 1440/320, and zero app-origin console errors.
+
+Cleanup was re-proved: all four marked spatial fixture counts were zero, the
+fixture listing/team/auth user and fixture JSON were removed, the temporary
+`scripts/task6b-review-fixture.py` was deleted, the browser viewport was reset
+and its temporary tab finalized, and listeners on 3001/8001 were stopped.
+
 ## Concerns
 
 None blocking. Map tiles remain a network dependency and WebGL availability
