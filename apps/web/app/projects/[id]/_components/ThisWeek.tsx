@@ -29,7 +29,7 @@ export function ThisWeek({ projectId, latestCheckin }: { projectId: number; late
         <p className="text-[10px] font-mono text-accent-green tracking-widest uppercase">This Week</p>
         {canEdit && <button
           onClick={() => setOpen(true)}
-          className="text-[10px] font-mono border border-border text-text-muted hover:text-text-primary px-3 py-1 rounded-[6px] transition-colors"
+          className="text-[10px] font-mono border border-border text-text-muted hover:text-text-primary px-3 py-1 rounded-[6px] portal-transition"
         >
           Log check-in
         </button>}

@@ -198,7 +198,7 @@ export default function TariffsAdminPage() {
               <button
                 onClick={() => save(key)}
                 disabled={!canEdit || saving === key}
-                className="bg-accent-blue text-white font-mono text-xs font-semibold px-4 py-1.5 rounded-card disabled:opacity-50 hover:opacity-90 transition-colors"
+                className="bg-accent-blue text-white font-mono text-xs font-semibold px-4 py-1.5 rounded-card disabled:opacity-50 hover:opacity-90 portal-transition"
               >
                 {saving === key ? "Saving…" : "Save"}
               </button>

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -7,6 +7,15 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function source(relativePath: string): string {
   return readFileSync(path.join(root, relativePath), "utf8");
+}
+
+function sourceFiles(relativeDirectory: string): string[] {
+  const absoluteDirectory = path.join(root, relativeDirectory);
+  return readdirSync(absoluteDirectory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = path.join(relativeDirectory, entry.name);
+    if (entry.isDirectory()) return sourceFiles(relativePath);
+    return /\.(?:ts|tsx)$/.test(entry.name) ? [relativePath] : [];
+  });
 }
 
 function blocksAfter(sourceText: string, startPattern: RegExp): string[] {
@@ -216,6 +225,30 @@ async function main(): Promise<void> {
     assert.doesNotMatch(source(relativePath), /\btransition-(?:all|colors)\b/, `${relativePath} must not use generic Tailwind transitions`);
   }
   assert.doesNotMatch(globals, /\.button:hover\s*\{[^}]*translateY/, "Buttons must not translate on hover");
+
+  const genericMotionClass = /\b(?:transition-(?:colors|all)|ease-[\w-]+)\b/;
+  for (const relativePath of sourceFiles("apps/web/app")) {
+    for (const [index, line] of source(relativePath).split("\n").entries()) {
+      if (!genericMotionClass.test(line)) continue;
+      assert.match(
+        line,
+        /\b(?:portal-transition|button)\b/,
+        `${relativePath}:${index + 1} must use the shared portal-transition/button contract instead of generic Tailwind motion`,
+      );
+    }
+  }
+  for (const relativePath of [
+    "apps/web/app/settings/tariffs/page.tsx",
+    "apps/web/app/projects/[id]/_components/ThisWeek.tsx",
+    "apps/web/app/projects/[id]/_components/CheckInModal.tsx",
+  ]) {
+    assert.doesNotMatch(source(relativePath), genericMotionClass, `${relativePath} must not retain generic Tailwind motion classes`);
+  }
+  assert.match(
+    globals,
+    /\.stat-value\.status-ink-success\s*\{[^}]*color:\s*var\(--status-success-ink\)/s,
+    "A stronger stat-value success selector must preserve semantic success colour through the cascade",
+  );
 
   const portalPage = blocksAfter(globals, /\.portal-page\s*(?=\{)/).find((block) => /\banimation(?:-name)?\s*:/.test(block));
   assert.ok(portalPage, ".portal-page must apply the entry animation");

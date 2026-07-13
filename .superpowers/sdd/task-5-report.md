@@ -141,3 +141,72 @@ wrong environment variable name; the exact required invocation then passed.
   trailing-space findings are intentionally excluded only by the exact scoped
   diff-check command recorded above. No unqualified `git diff --check` pass is
   claimed.
+
+## Final re-review motion and Scout cascade fix
+
+The final re-review's one Important motion finding and one Minor semantic
+cascade finding were fixed as a narrow follow-up.
+
+### RED evidence
+
+The smoke was expanded before production changes to recurse through every
+`.ts`/`.tsx` consumer under `apps/web/app`, reject `transition-colors`,
+`transition-all`, and `ease-*` unless the same class contract uses
+`portal-transition` or `button`, explicitly cover the three reported files,
+and require a stronger stat-value semantic-success selector.
+
+```text
+pnpm test:ui-foundation
+AssertionError [ERR_ASSERTION]: apps/web/app/projects/[id]/_components/CheckInModal.tsx:89 must use the shared portal-transition/button contract instead of generic Tailwind motion
+exit 1
+```
+
+### Implementation
+
+- Replaced the residual generic transition class in Tariff Save, project
+  `Log check-in`, and modal `Save check-in` controls with
+  `portal-transition`.
+- Added `.stat-value.status-ink-success` after the base stat-value rule so LOW
+  dolomite risk retains semantic success ink in both colour modes.
+
+### Fresh verification
+
+| Gate | Result |
+|---|---|
+| `pnpm test:ui-foundation` | PASS — recursive portal motion scan and cascade regression |
+| `pnpm --filter web typecheck` | PASS — exit 0 |
+| `pnpm --filter web lint` | PASS — exit 0 |
+| local Supabase placeholder environment `pnpm --filter web build` | PASS — compiled and generated 26/26 pages; documented warnings only |
+| exact local production server `127.0.0.1:3001` `pnpm test:auth-roles` | PASS |
+| same server plus worker `127.0.0.1:8001` `pnpm test:api:workflow` | PASS |
+| `cd apps/worker && PYTHONPATH=. uv run --extra dev pytest -q` | PASS — 40 passed |
+| `git diff --check b8ca938..HEAD -- . ':(exclude)apps/web/public/brand/capitec-c-mark.svg'` | PASS after commit |
+| canonical C-mark `cmp -s` against the handoff asset | PASS — exit 0 |
+
+### Authenticated runtime evidence
+
+The exact built application was served at `127.0.0.1:3001` and probed with a
+temporary authenticated Owner:
+
+- Tariff Save: `transition-duration` five times `0.16s`; timing function five
+  times `cubic-bezier(0.2, 0, 0, 1)` for color, background-color, border-color,
+  opacity, and width.
+- Project `Log check-in`: the same `0.16s` and prescribed easing values.
+- Modal `Save check-in`: the same `0.16s` and prescribed easing values.
+- Dark Scout LOW risk: semantic success `rgb(167, 237, 195)` on card surface
+  `rgb(17, 27, 43)`, replacing the prior selected blue.
+
+The first dev-server Scout read exposed its stale pre-change CSS cache; a fresh
+production build contained the stronger selector, and the exact production
+runtime probe above passed. The temporary project, listing, membership, actor
+activity, and auth user were deleted and each was verified absent.
+
+### Self-review
+
+- No API, actor, capability, persistence, route, or business behavior changed.
+- The repository-wide assertion prevents page-list omissions from creating
+  another generic-motion false green.
+- All three controls retain their existing hover/disabled behavior and now use
+  the shared 160ms easing contract.
+- The stronger selector changes only semantic success stat values; ordinary
+  stat values retain selected ink.
