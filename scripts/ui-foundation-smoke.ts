@@ -44,6 +44,9 @@ async function main(): Promise<void> {
     assert.ok(existsSync(path.join(root, relativePath)), `Missing visual-foundation asset: ${relativePath}`);
   }
 
+  const globals = source("apps/web/app/globals.css");
+  assert.doesNotMatch(globals, /#e61414/i, "Production CSS must reserve #E61414 for immutable Capitec SVG assets");
+
   const formatterPath = "apps/web/lib/format.ts";
   assert.ok(existsSync(path.join(root, formatterPath)), `Missing visual-foundation formatter: ${formatterPath}`);
   const { formatZar } = await import(pathToFileURL(path.join(root, formatterPath)).href);
@@ -66,7 +69,6 @@ async function main(): Promise<void> {
   assert.match(colourModeControl, /<PortalIcon\b[\s\S]*\/?>/, "The colour-mode button must contain PortalIcon");
   assert.match(portalChrome, /\bColourMode\b/, "PortalChrome must type the colour-mode control with ColourMode");
 
-  const globals = source("apps/web/app/globals.css");
   const darkTokens = blocksAfter(globals, /\[data-mode=["']?dark["']?\]\s*(?=\{)/)[0];
   assert.ok(darkTokens, "globals.css must define a dark-mode token block");
   assert.match(darkTokens, /--[\w-]*(?:canvas|bg-base)[\w-]*\s*:/, "Dark mode must override the canvas token");

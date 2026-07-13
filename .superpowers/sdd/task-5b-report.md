@@ -81,3 +81,47 @@ The source and copied destinations were also compared byte-for-byte with `cmp` f
 - Confirmed the full logo and wordmark are shipped at their canonical public paths.
 - Confirmed no dark-mode, motion, or breakpoint implementation was added.
 - Confirmed `.superpowers/audits/` was neither edited nor staged.
+
+## Review Fix — Reserved Capitec Red
+
+The Task 5B review found that `.notification-dot` still used the C-mark-only `#E61414`. The notification indicator now uses the existing action-blue `var(--blue)` token, while error styling remains on the separate maroon semantic palette.
+
+### Regression RED
+
+Added a focused `scripts/ui-foundation-smoke.ts` assertion that rejects case-insensitive `#E61414` use in the production stylesheet before later Task 5C assertions run.
+
+```text
+pnpm test:ui-foundation
+AssertionError [ERR_ASSERTION]: Production CSS must reserve #E61414 for immutable Capitec SVG assets
+at scripts/ui-foundation-smoke.ts:48:10
+exit 1
+```
+
+### Review Fix GREEN Boundary
+
+After changing `.notification-dot` to `background: var(--blue)`, the reserved-red assertion passes and the focused smoke reaches only the intentional Task 5C RED:
+
+```text
+pnpm test:ui-foundation
+AssertionError [ERR_ASSERTION]: AppShell must persist colour mode independently
+at scripts/ui-foundation-smoke.ts:56:10
+exit 1
+```
+
+There is one production CSS file (`apps/web/app/globals.css`), and `rg -n -i '#e61414' apps/web --glob '*.css'` returns no matches.
+
+### Review Fix Verification
+
+```text
+pnpm --filter web typecheck
+$ tsc --noEmit
+exit 0
+```
+
+```text
+pnpm --filter web lint
+$ eslint
+exit 0
+```
+
+The scoped whitespace check for `apps/web/app/globals.css`, `scripts/ui-foundation-smoke.ts`, and this report exits 0. Self-review confirms the change is limited to the semantic notification colour, its regression assertion, and this evidence; routes, authentication, actor rendering, capabilities, immutable assets, colour-mode work, responsive work, and motion work are untouched.
