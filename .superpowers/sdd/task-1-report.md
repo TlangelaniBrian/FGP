@@ -196,3 +196,49 @@ With the running app's database and Supabase environment supplied, the
 production build compiled and completed TypeScript/page-data collection, then
 reproduced the pre-existing `/login` prerender failure because `useSearchParams`
 is not wrapped in Suspense. No unrelated login code was changed.
+
+## PDF object-path remediation (2026-07-13)
+
+### RED
+
+Two independent integration checks were added before route changes. The focused
+smoke exited 1 with both vulnerabilities reproduced:
+
+```text
+RED caller-controlled document PDF path: document PATCH accepted a caller-controlled PDF object path
+RED cross-owner document PDF path: cross-owner PDF path returned 502
+AssertionError: 2 security regression checks failed
+```
+
+The first check showed an authenticated project-capable actor could set
+`pdf_url` through the status PATCH. The second persisted another actor's object
+prefix through the service client and showed download reached storage signing
+instead of rejecting the namespace.
+
+### Fix
+
+- Document PATCH now accepts and updates status only; `pdfUrl` is no longer a
+  caller-controlled input or database update value.
+- Generation and download share one object-path function. Before requesting a
+  signed URL, GET requires the stored path to exactly equal the authenticated
+  user's generated namespace: `<userId>/<documentId>-<docType>.pdf`.
+- A mismatched persisted path returns 422 without altering the document or
+  contacting storage.
+
+### GREEN
+
+Fresh verification after the route changes:
+
+```text
+pnpm test:auth-roles
+exit 0: Authenticated role smoke passed: RLS, page boundary, Viewer controls, stable approvals, and cleanup asserted.
+
+pnpm --filter web typecheck
+exit 0
+
+pnpm --filter web lint
+exit 0
+
+git diff --check
+exit 0
+```

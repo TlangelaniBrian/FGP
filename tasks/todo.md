@@ -40,6 +40,13 @@
 - [x] Apply the migration locally and run the focused and repository verification checks.
 - [x] Append RED/GREEN evidence, self-review the diff, and commit only task files.
 
+## Task 1 PDF object-path remediation (2026-07-13)
+
+- [x] Add failing integration coverage for caller-controlled and cross-owner PDF paths.
+- [x] Remove `pdfUrl` from document PATCH and enforce the generated object namespace on download.
+- [x] Run focused smoke, typecheck, lint, and diff verification.
+- [x] Append evidence and commit the focused fix without audit artifacts.
+
 ## Review
 
 Implemented the shared Capitec-style shell, route-aware navigation, visual
@@ -55,6 +62,10 @@ The Task 1 re-review remediation separates active-member reads from non-Viewer
 writes in migration 0016, makes document downloads read-only with generation
 behind a guarded POST, and keys all governance approvals to stable team member
 IDs so active email-matched members remain part of unanimity.
+
+The final PDF path hardening removes caller control of `pdf_url` from document
+status updates and validates stored paths against the exact owner, document ID,
+and document type namespace used by server-side generation before signing.
 
 Verification: `supabase migration up --local`, live capital API read/write,
 Viewer 403 checks for capital/settings/tariffs, `pnpm --filter web typecheck`,

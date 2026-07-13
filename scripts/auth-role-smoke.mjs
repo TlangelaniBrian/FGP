@@ -292,6 +292,41 @@ try {
     assert.deepEqual(inserted, [], `Viewer directly inserted: ${inserted.join(", ")}`);
   });
 
+  await checkRegression("caller-controlled document PDF path", async () => {
+    const document = await createWorkspaceRecord("compliance_documents", {
+      user_id: sessions.owner.userId,
+      doc_type: "zoning_certificate",
+      status: "draft",
+    });
+    const foreignPath = `${sessions.analyst.userId}/${document.id}-${document.doc_type}.pdf`;
+
+    const response = await api(`/api/documents/${document.id}`, sessions.owner.token, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "ready", pdfUrl: foreignPath }),
+    });
+    assert.equal(response.response.status, 200, JSON.stringify(response.payload));
+    const [persisted] = await admin(`/rest/v1/compliance_documents?id=eq.${document.id}&select=pdf_url,status`);
+    assert.equal(persisted.pdf_url, null, "document PATCH accepted a caller-controlled PDF object path");
+  });
+
+  await checkRegression("cross-owner document PDF path", async () => {
+    const document = await createWorkspaceRecord("compliance_documents", {
+      user_id: sessions.owner.userId,
+      doc_type: "zoning_certificate",
+      status: "ready",
+    });
+    const foreignPath = `${sessions.analyst.userId}/${document.id}-${document.doc_type}.pdf`;
+    await admin(`/rest/v1/compliance_documents?id=eq.${document.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ pdf_url: foreignPath }),
+    });
+    const response = await api(`/api/documents/${document.id}/download`, sessions.owner.token, { redirect: "manual" });
+    assert.equal(response.response.status, 422, `cross-owner PDF path returned ${response.response.status}`);
+    assert.match(response.payload?.error ?? "", /object path/i);
+    const [persisted] = await admin(`/rest/v1/compliance_documents?id=eq.${document.id}&select=pdf_url`);
+    assert.equal(persisted.pdf_url, foreignPath, "download validation mutated the persisted path");
+  });
+
   await checkRegression("protected page active-member boundary", async () => {
     for (const kind of ["non-member", "invited", "suspended", "removed"]) {
       const cookie = await sessionCookie(sessions[kind]);

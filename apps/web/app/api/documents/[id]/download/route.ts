@@ -23,6 +23,10 @@ function storedObjectPath(value: string) {
   }
 }
 
+function documentObjectPath(userId: string, id: number, docType: string) {
+  return `${userId}/${id}-${docType}.pdf`;
+}
+
 export async function GET(request: Request, { params }: RouteContext) {
   const actor = await getAuthenticatedActor(request);
   if (!actor) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
@@ -32,7 +36,9 @@ export async function GET(request: Request, { params }: RouteContext) {
   if (!document) return NextResponse.json({ error: "document not found" }, { status: 404 });
   if (!document.pdfUrl) return NextResponse.json({ error: "document has not been generated" }, { status: 404 });
   const path = storedObjectPath(document.pdfUrl);
-  if (!path) return NextResponse.json({ error: "stored document path is invalid" }, { status: 500 });
+  if (path !== documentObjectPath(actor.userId, document.id, document.docType)) {
+    return NextResponse.json({ error: "stored document object path is invalid" }, { status: 422 });
+  }
   const admin = createAdminSupabase();
   if (!admin) return NextResponse.json({ error: "document storage is unavailable" }, { status: 503 });
   const signed = await admin.storage.from("compliance-documents").createSignedUrl(path, 60);
@@ -58,7 +64,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const admin = createAdminSupabase();
   if (!admin) return NextResponse.json({ error: "document storage is unavailable" }, { status: 503 });
-  const path = `${guard.actor!.userId}/${document.id}-${document.docType}.pdf`;
+  const path = documentObjectPath(guard.actor!.userId, document.id, document.docType);
   const upload = await admin.storage.from("compliance-documents").upload(path, await generated.arrayBuffer(), { contentType: "application/pdf", upsert: true });
   if (upload.error) return NextResponse.json({ error: upload.error.message }, { status: 502 });
   const [updated] = await db.update(complianceDocuments).set({ pdfUrl: path, status: document.status === "draft" ? "ready" : document.status }).where(eq(complianceDocuments.id, id)).returning();
