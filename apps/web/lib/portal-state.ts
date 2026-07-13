@@ -1,5 +1,7 @@
 "use client";
 
+export { formatZar } from "./format";
+
 export type Role = "Owner" | "Chairperson" | "Treasurer" | "Analyst" | "Viewer";
 export type VisualMode = "classic" | "navy" | "bold";
 
@@ -38,8 +40,4 @@ export function writePortalPreference<T>(key: string, value: T) {
   } catch {
     // Preferences are optional; a restricted browser must not break the portal.
   }
-}
-
-export function formatZar(value: number) {
-  return `R ${value.toLocaleString("en-ZA", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }

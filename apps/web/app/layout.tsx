@@ -1,9 +1,17 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
+import "material-symbols/rounded.css";
 import "./globals.css";
 import { AppShell } from "./_components/AppShell";
 import { db, projects } from "@fgp/database";
 import { desc, sql } from "drizzle-orm";
 import { getAuthenticatedActor } from "@/lib/portal-auth";
+
+const nunito = localFont({
+  src: "./fonts/NunitoSans-Variable.ttf",
+  variable: "--font-nunito",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "First Generation Properties",
@@ -18,5 +26,5 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     if (actor) projectRows = await db.select({ id: projects.id, name: projects.name, status: projects.status }).from(projects).where(sql`${projects.userId} = ${actor.userId}`).orderBy(desc(projects.createdAt)).limit(20);
   } catch {}
 
-  return <html lang="en"><body><AppShell actor={actor} projects={projectRows.map((project) => ({ id: project.id, name: project.name ?? "Untitled project", status: project.status ?? "planning" }))}>{children}</AppShell></body></html>;
+  return <html lang="en" className={nunito.variable}><body><AppShell actor={actor} projects={projectRows.map((project) => ({ id: project.id, name: project.name ?? "Untitled project", status: project.status ?? "planning" }))}>{children}</AppShell></body></html>;
 }
