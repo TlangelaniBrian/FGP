@@ -1,3 +1,25 @@
+import { randomUUID } from "node:crypto";
+
+export function createRunIdentity(prefix) {
+  const diagnosticPrefix = String(prefix ?? "run")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 13)
+    .replace(/-+$/g, "") || "run";
+  const runId = `${diagnosticPrefix}-${randomUUID()}`;
+
+  return {
+    diagnosticPrefix,
+    runId,
+    marker: `fgp-workflow:${runId}`,
+    email: `fgp-workflow-${runId}@example.com`,
+    secondaryEmail: `fgp-workflow-secondary-${runId}@example.com`,
+    actorName: `Workflow Smoke ${runId}`,
+  };
+}
+
 export async function attemptAll(tasks) {
   const errors = [];
 

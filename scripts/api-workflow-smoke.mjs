@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { attemptAll } from "./workflow-cleanup.mjs";
+import { attemptAll, createRunIdentity } from "./workflow-cleanup.mjs";
 
 const site = process.env.FGP_SITE_URL ?? "http://localhost:3000";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -8,11 +8,7 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 assert(anonKey, "NEXT_PUBLIC_SUPABASE_ANON_KEY is required");
 assert(serviceKey, "SUPABASE_SERVICE_ROLE_KEY is required");
 
-const runId = process.env.FGP_WORKFLOW_RUN_ID ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const marker = `fgp-workflow:${runId}`;
-const email = `fgp-workflow-${runId}@example.com`;
-const secondaryEmail = `fgp-workflow-secondary-${runId}@example.com`;
-const actorName = `Workflow Smoke ${runId}`;
+const { runId, marker, email, secondaryEmail, actorName } = createRunIdentity(process.env.FGP_WORKFLOW_RUN_ID);
 const password = "WorkflowTest123!";
 let userId;
 let secondaryMemberId;
