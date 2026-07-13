@@ -3,7 +3,8 @@
 export { formatZar } from "./format";
 
 export type Role = "Owner" | "Chairperson" | "Treasurer" | "Analyst" | "Viewer";
-export type VisualMode = "classic" | "navy" | "bold";
+export type ColourMode = "light" | "dark";
+export type VisualDirection = "classic" | "navy" | "bold";
 
 export const team = [
   { name: "Tlangelani Mkhabela", initials: "TM", role: "Treasurer" as Role, email: "tlangelani@fgproperties.co.za" },

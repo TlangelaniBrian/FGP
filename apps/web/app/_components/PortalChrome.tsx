@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { writePortalPreference, type VisualMode } from "@/lib/portal-state";
+import {
+  writePortalPreference,
+  type ColourMode,
+  type VisualDirection,
+} from "@/lib/portal-state";
 import { createClient } from "@/lib/supabase";
 import { usePortalActor } from "@/lib/portal-actor";
 import { PortalIcon } from "./PortalIcon";
@@ -13,7 +17,14 @@ const labels: Record<string, string> = {
   "/projects": "Projects", "/capital": "Capital fund", "/settings/tariffs": "Tariffs", "/settings/scraper": "Scraper jobs", "/settings": "Settings",
 };
 
-export function PortalChrome({ mode, onModeChange }: { mode: VisualMode; onModeChange: (mode: VisualMode) => void }) {
+type PortalChromeProps = {
+  colourMode: ColourMode;
+  visualDirection: VisualDirection;
+  onColourModeChange: (mode: ColourMode) => void;
+  onVisualDirectionChange: (direction: VisualDirection) => void;
+};
+
+export function PortalChrome({ colourMode, visualDirection, onColourModeChange, onVisualDirectionChange }: PortalChromeProps) {
   const pathname = usePathname();
   const actor = usePortalActor();
   const [open, setOpen] = useState<"user" | "notifications" | null>(null);
@@ -29,11 +40,36 @@ export function PortalChrome({ mode, onModeChange }: { mode: VisualMode; onModeC
       <header className="portal-topbar">
         <div className="portal-crumbs"><span>First Generation</span><PortalIcon name="chevron_right" className="crumb-chevron" /><strong>{crumb}</strong></div>
         <div className="portal-toolbar">
-          <div className="mode-switch" aria-label="Visual direction">
-            {(["classic", "navy", "bold"] as VisualMode[]).map((item) => (
-              <button key={item} className={mode === item ? "is-active" : ""} onClick={() => { onModeChange(item); writePortalPreference("fgp_visual_mode", item); }}>{item}</button>
+          <div className="mode-switch" role="group" aria-label="Visual direction">
+            {(["classic", "navy", "bold"] as VisualDirection[]).map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={visualDirection === item ? "is-active" : ""}
+                aria-label={`Use ${item} visual direction`}
+                aria-pressed={visualDirection === item}
+                onClick={() => {
+                  onVisualDirectionChange(item);
+                  writePortalPreference("fgp_visual_direction", item);
+                }}
+              >
+                {item}
+              </button>
             ))}
           </div>
+          <button
+            type="button"
+            className="icon-button colour-mode-button"
+            aria-label={`Switch to ${colourMode === "dark" ? "light" : "dark"} colour mode`}
+            aria-pressed={colourMode === "dark"}
+            onClick={() => {
+              const nextMode: ColourMode = colourMode === "dark" ? "light" : "dark";
+              onColourModeChange(nextMode);
+              writePortalPreference("fgp_colour_mode", nextMode);
+            }}
+          >
+            <PortalIcon name={colourMode === "dark" ? "light_mode" : "dark_mode"} />
+          </button>
           <button className="icon-button" aria-label="Toggle notifications" onClick={() => setOpen(open === "notifications" ? null : "notifications")}><PortalIcon name="notifications" /><span className="notification-dot" /></button>
           <div className="popover-anchor">
             <button className="user-trigger" aria-label="Open account menu" onClick={() => setOpen(open === "user" ? null : "user")}>
