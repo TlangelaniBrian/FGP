@@ -12,11 +12,18 @@ type Contribution = {
   amount: number;
   note: string;
 };
+type Signature = {
+  memberId: number;
+  name: string;
+  role: string;
+  signed: boolean;
+};
 type GoalProposal = {
   id: number;
   newAmount: string;
   approvals: number[];
   proposedBy: string;
+  signatures: Signature[];
 };
 type Correction = {
   id: number;
@@ -24,10 +31,12 @@ type Correction = {
   action: string;
   approvals: number[];
   proposedBy: string;
+  proposedByMemberId: number | null;
   proposedAmount: string | null;
+  signatures: Signature[];
 };
 type Governance = {
-  requiredMembers: Array<{ memberId: number; name: string; role: string; status: string }>;
+  requiredMembers: Signature[];
   members: Array<{ memberId: number; name: string; role: string; status: string }>;
 };
 
@@ -91,6 +100,7 @@ export default function CapitalPage() {
             newAmount: string;
             approvals: unknown;
             proposedBy: string;
+            signatures: Signature[];
           } | null;
           corrections: Array<{
             id: number;
@@ -98,7 +108,9 @@ export default function CapitalPage() {
             action: string;
             approvals: unknown;
             proposedBy: string;
+            proposedByMemberId: number | null;
             proposedAmount: string | null;
+            signatures: Signature[];
           }>;
           governance: Governance;
         };
@@ -120,6 +132,7 @@ export default function CapitalPage() {
               ? (payload.goalProposal.approvals as number[])
               : [],
             proposedBy: payload.goalProposal.proposedBy,
+            signatures: payload.goalProposal.signatures,
           });
         setCorrections(
           payload.corrections.map((item) => ({
@@ -130,7 +143,9 @@ export default function CapitalPage() {
               ? (item.approvals as number[])
               : [],
             proposedBy: item.proposedBy,
+            proposedByMemberId: item.proposedByMemberId,
             proposedAmount: item.proposedAmount,
+            signatures: item.signatures,
           })),
         );
         setGovernance(payload.governance);
@@ -183,15 +198,23 @@ export default function CapitalPage() {
       setMessage(payload.error ?? "Could not create goal proposal");
       return;
     }
-    setGoalProposal({
-      id: payload.id,
-      newAmount: payload.newAmount,
-      approvals: payload.approvals,
-      proposedBy: payload.proposedBy,
-    });
-    setMessage(
-      "Goal proposal created. Every active governing member must co-sign before it applies.",
-    );
+    if (payload.status === "approved") {
+      setGoal(Number(payload.newAmount));
+      setGoalProposal(null);
+      setMessage("Goal approved and applied.");
+    } else {
+      setGoalProposal({
+        id: payload.id,
+        newAmount: payload.newAmount,
+        approvals: payload.approvals,
+        proposedBy: payload.proposedBy,
+        signatures: payload.signatures,
+      });
+      setGovernance((current) => ({ ...current, requiredMembers: payload.signatures }));
+      setMessage(
+        "Goal proposal created. Every active governing member must co-sign before it applies.",
+      );
+    }
   }
 
   async function approveGoal() {
@@ -214,10 +237,14 @@ export default function CapitalPage() {
       setGoalProposal(null);
       setMessage("Goal approved and applied.");
     } else {
-      setGoalProposal({ ...goalProposal, approvals: payload.approvals });
+      setGoalProposal({
+        ...goalProposal,
+        approvals: payload.approvals,
+        signatures: payload.signatures,
+      });
       setGovernance((current) => ({
         ...current,
-        requiredMembers: payload.requiredMembers ?? current.requiredMembers,
+        requiredMembers: payload.signatures ?? current.requiredMembers,
       }));
       setMessage("Your co-sign was recorded.");
     }
@@ -251,7 +278,9 @@ export default function CapitalPage() {
         action: payload.action,
         approvals: payload.approvals,
         proposedBy: payload.proposedBy,
+        proposedByMemberId: payload.proposedByMemberId,
         proposedAmount: payload.proposedAmount,
+        signatures: payload.signatures,
       },
     ]);
     setCorrectionFor(null);
@@ -274,13 +303,26 @@ export default function CapitalPage() {
       setMessage(payload.error ?? "Could not co-sign correction");
       return;
     }
-    setCorrections((items) =>
-      items.map((item) =>
-        item.id === proposal.id
-          ? { ...item, approvals: payload.approvals }
-          : item,
-      ),
-    );
+    if (payload.approved) {
+      setCorrections((items) => items.filter((item) => item.id !== proposal.id));
+      setContributions((items) =>
+        proposal.action === "remove"
+          ? items.filter((item) => item.id !== proposal.contributionId)
+          : items.map((item) =>
+              item.id === proposal.contributionId
+                ? { ...item, amount: Number(payload.proposedAmount), note: payload.proposedNote ?? item.note }
+                : item,
+            ),
+      );
+    } else {
+      setCorrections((items) =>
+        items.map((item) =>
+          item.id === proposal.id
+            ? { ...item, approvals: payload.approvals, signatures: payload.signatures }
+            : item,
+        ),
+      );
+    }
     setMessage(
       payload.approved
         ? "Correction approved and applied."
@@ -429,6 +471,7 @@ export default function CapitalPage() {
                     </small>
                   </span>
                   {can(actor?.role ?? "Viewer", "cosign") &&
+                    proposal.proposedByMemberId !== actor?.memberId &&
                     !proposal.approvals.includes(actor?.memberId ?? -1) && (
                     <button
                       className="button button-secondary"
@@ -498,7 +541,7 @@ export default function CapitalPage() {
                   {governance.requiredMembers.length} signatures recorded.
                 </p>
                 <div style={{ marginTop: 10 }}>
-                  {governance.requiredMembers.map((member) => (
+                  {goalProposal.signatures.map((member) => (
                     <div
                       className="split"
                       key={member.memberId}
@@ -507,14 +550,12 @@ export default function CapitalPage() {
                       <span>{member.name}</span>
                       <span
                         className={
-                          goalProposal.approvals.includes(member.memberId)
+                          member.signed
                             ? "tag tag-green"
                             : "tag tag-amber"
                         }
                       >
-                        {goalProposal.approvals.includes(member.memberId)
-                          ? "Signed"
-                          : "Pending"}
+                        {member.signed ? "Signed" : "Pending"}
                       </span>
                     </div>
                   ))}
@@ -575,17 +616,17 @@ export default function CapitalPage() {
                 </small>
               </span>
               <span className="split">
-                {governance.requiredMembers.map((member) => (
+                {proposal.signatures.map((member) => (
                   <span
                     className={
-                      proposal.approvals.includes(member.memberId)
+                      member.signed
                         ? "tag tag-green"
                         : "tag tag-amber"
                     }
                     key={`${proposal.id}-${member.memberId}`}
                   >
                     {member.name.split(" ")[0]}:{" "}
-                    {proposal.approvals.includes(member.memberId) ? "✓" : "…"}
+                    {member.signed ? "✓" : "…"}
                   </span>
                 ))}
               </span>

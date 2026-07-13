@@ -221,8 +221,8 @@ export const capitalGoalProposals = pgTable("capital_goal_proposals", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   proposedBy: text("proposed_by").notNull(),
   proposedByRole: text("proposed_by_role").notNull(),
+  proposedByMemberId: bigint("proposed_by_member_id", { mode: "number" }),
   newAmount: numeric("new_amount").notNull(),
-  approvals: jsonb("approvals").notNull().default([]),
   status: text("status").default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -232,12 +232,31 @@ export const capitalCorrectionProposals = pgTable("capital_correction_proposals"
   contributionId: bigserial("contribution_id", { mode: "number" }).notNull(),
   proposedBy: text("proposed_by").notNull(),
   proposedByRole: text("proposed_by_role").notNull(),
+  proposedByMemberId: bigint("proposed_by_member_id", { mode: "number" }),
   action: text("action").notNull(),
   proposedAmount: numeric("proposed_amount"),
   proposedNote: text("proposed_note"),
-  approvals: jsonb("approvals").notNull().default([]),
   status: text("status").default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const capitalGoalElectorate = pgTable("capital_goal_electorate", {
+  proposalId: bigint("proposal_id", { mode: "number" }).notNull(),
+  memberId: bigint("member_id", { mode: "number" }).notNull(),
+  memberName: text("member_name").notNull(),
+  memberRole: text("member_role").notNull(),
+});
+
+export const capitalGoalApprovals = pgTable("capital_goal_approvals", {
+  proposalId: bigint("proposal_id", { mode: "number" }).notNull(),
+  memberId: bigint("member_id", { mode: "number" }).notNull(),
+  approvedAt: timestamp("approved_at").defaultNow(),
+});
+
+export const capitalCorrectionApprovals = pgTable("capital_correction_approvals", {
+  proposalId: bigint("proposal_id", { mode: "number" }).notNull(),
+  memberId: bigint("member_id", { mode: "number" }).notNull(),
+  approvedAt: timestamp("approved_at").defaultNow(),
 });
 
 export const portalSettings = pgTable("portal_settings", {

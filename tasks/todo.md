@@ -66,6 +66,14 @@
 - [x] Apply the trusted-decision migration and run the full GREEN matrix.
 - [x] Append the Task 3 report, self-review, and commit locally without audit artifacts.
 
+## Task 4 atomic capital governance (2026-07-13)
+
+- [x] Capture authenticated RED evidence for reserved settings, role boundaries, stable-member approvals, concurrency, atomic effects, and direct-write denial.
+- [x] Add normalized electorate/approval schema and safe legacy backfill migration.
+- [x] Implement transactional goal and correction mutation services plus minimal handler/UI contract changes.
+- [x] Apply the migration locally and run the complete Task 4 GREEN verification matrix.
+- [x] Self-review, write the Task 4 report, and commit locally without pushing.
+
 ## Review
 
 Implemented the shared Capitec-style shell, route-aware navigation, visual
@@ -96,6 +104,12 @@ The independent-review remediation restricts hard-coded tariff fallback to its
 real 2026 vintage, rejects incomplete later-year bundles, treats empty zoning
 rows as degraded evidence, and persists actual units plus structured capacity
 and decision-evidence fields so stored costs remain auditable.
+
+Task 4 reserves `capital_goal` behind the capital workflow, snapshots stable
+member electorates, stores normalized approvals, and serializes quorum checks
+with proposal/effect updates in database transactions. Correction makers no
+longer count as co-signers, direct PostgREST governance writes are denied, and
+the Capital UI renders names and signed state from member-ID-backed responses.
 
 Verification: `supabase migration up --local`, live capital API read/write,
 Viewer 403 checks for capital/settings/tariffs, `pnpm --filter web typecheck`,

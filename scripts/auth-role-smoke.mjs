@@ -356,10 +356,10 @@ try {
     result = await api("/api/capital", sessions.owner.token, { method: "POST", body: JSON.stringify({ action: "correction", contributionId: createdContributions[0], correctionAction: "edit", amount: 124, proposedNote: `Auth role correction ${runId}` }) });
     assert.equal(result.response.status, 201, JSON.stringify(result.payload));
     createdCorrectionProposals.push(result.payload.id);
-    assert.deepEqual(result.payload.approvals, [sessions.owner.memberId], "correction approvals must use member IDs");
+    assert.deepEqual(result.payload.approvals, [], "correction maker must not be recorded as an approver");
     result = await api("/api/capital", sessions.analyst.token, { method: "POST", body: JSON.stringify({ action: "approve-correction", proposalId: createdCorrectionProposals[0] }) });
     assert.equal(result.response.status, 200, JSON.stringify(result.payload));
-    assert.deepEqual(new Set(result.payload.approvals), new Set([sessions.owner.memberId, sessions.analyst.memberId]));
+    assert.deepEqual(result.payload.approvals, [sessions.analyst.memberId]);
   });
 
   assert.equal(regressionFailures.length, 0, `${regressionFailures.length} security regression checks failed`);
