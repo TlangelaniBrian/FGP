@@ -154,11 +154,55 @@ build rate (`R18,500/m²`), and municipality-specific bulk ranges.
 
 ## Concerns
 
-- The worker retains the existing tariff fallback strategy when a requested
-  year's DB rows are missing or the DB is unavailable. This preserves service
-  availability but means operators must publish complete year-specific tariffs
-  for authoritative non-2026 calculations.
+- The worker retains hard-coded tariff fallback only for its matching 2026
+  vintage. Operators must publish complete, valid database bundles before any
+  other year can be analyzed or saved.
 - Redis was unavailable during local smoke runs, so worker rate limiting used
   its existing in-memory fallback.
 - Next.js still reports the pre-existing multiple-lockfile, middleware naming,
   and Node `module.register()` deprecation warnings; none failed the build.
+
+## Independent review remediation
+
+Implementation commit: `2e8d478` (`fix(feasibility): persist trusted decision evidence`).
+
+All findings in `task-3-review.md` were addressed under TDD:
+
+- Hard-coded fallback is now valid only for tariff year 2026. Missing, partial,
+  or invalid bundles for 2024–2025 and 2027–2030 return a clear worker HTTP 422;
+  save relays the validation outcome and inserts no listing or report.
+- Zoning evidence is derived from usable capacity constraints, so an existing
+  row with all-null coverage, FAR, storeys, and density fields is degraded and
+  can never return `viable=true`.
+- `CapacityResponse` is an explicit Pydantic model requiring the same density,
+  FAR, and footprint/storey components as the Next response validator.
+- Migration `0017_feasibility_decision_evidence.sql` adds and backfills
+  `actual_units`, `decision_status`, `zoning_evidence_available`, and the three
+  typed capacity components. Legacy rows are conservatively marked degraded;
+  new saves persist the trusted worker values atomically with their costs.
+
+Review-remediation RED evidence:
+
+- Focused worker baseline: `5 failed, 22 passed` for tariff relabeling/partial
+  bundles, all-null zoning, missing endpoint rejection, and missing Pydantic
+  capacity typing.
+- Authenticated workflow baseline failed with PostgREST `42703` because
+  `feasibility_reports.actual_units` did not exist.
+
+Review-remediation GREEN evidence:
+
+- Focused worker: `27 passed`.
+- Full worker: `39 passed in 0.73s`.
+- Local migration application: passed through migration 0017.
+- Authenticated workflow smoke: passed with explicit 120-second timeout; stored
+  target/actual units `8/5`, capacity `5/19/23`, definitive/evidence flags, and
+  five-unit build cost all matched. Missing 2030 tariffs returned 422 and left
+  no listing.
+- Authenticated role smoke: passed with explicit 120-second timeout.
+- Web typecheck, ESLint, and production build: passed (26/26 pages).
+- Ruff: passed. Pyright: `0 errors, 0 warnings`. `git diff --check`: passed.
+
+Review self-check confirmed the migration backfill is conservative, all new
+report evidence comes only from the validated worker response, non-2026 bundles
+cannot reach the fallback, temporary zoning fixtures reconcile and clean up,
+and the pre-existing `.superpowers/audits/` directory remains untouched.
