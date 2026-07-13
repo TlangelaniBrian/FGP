@@ -6,8 +6,16 @@ import { ScoutLeadCard, type ScoutListing } from "./_components/ScoutLeadCard";
 import { ScoutMap, type ScoutMapListing } from "./_components/ScoutMap";
 import type { ParcelAnalysis } from "@/lib/parcel";
 import { formatZar } from "@/lib/format";
+import {
+  EMPTY_SCOUT_SELECTION,
+  reconcileScoutSelection,
+  selectScoutAnalysisCoordinate,
+  selectScoutListing,
+  type ScoutCoordinate,
+  type ScoutSelectionState,
+} from "@/lib/scout-selection";
 
-type Coord = { lat: number; lng: number };
+type Coord = ScoutCoordinate;
 type ScoutFilter = "all" | "res2" | "res3" | "res4" | "low-dolomite" | "score-80";
 
 const FILTERS: Array<{ value: ScoutFilter; label: string }> = [
@@ -43,7 +51,7 @@ function matchesFilter(listing: ScoutListing, filter: ScoutFilter): boolean {
 }
 
 export default function ScoutPage() {
-  const [marker, setMarker] = useState<Coord | null>(null);
+  const [selection, setSelection] = useState<ScoutSelectionState>(EMPTY_SCOUT_SELECTION);
   const [latInput, setLatInput] = useState("");
   const [lngInput, setLngInput] = useState("");
   const [data, setData] = useState<ParcelAnalysis | null>(null);
@@ -54,7 +62,7 @@ export default function ScoutPage() {
   const [listingsError, setListingsError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<ScoutFilter>("all");
-  const [selectedListingId, setSelectedListingId] = useState<number | null>(null);
+  const { analysisCoordinate, selectedListingId } = selection;
 
   useEffect(() => {
     let cancelled = false;
@@ -105,10 +113,8 @@ export default function ScoutPage() {
   )), [filteredListings]);
 
   useEffect(() => {
-    if (selectedListingId !== null && !filteredListings.some((listing) => listing.id === selectedListingId)) {
-      setSelectedListingId(null);
-    }
-  }, [filteredListings, selectedListingId]);
+    setSelection((current) => reconcileScoutSelection(current, filteredListings.map((listing) => listing.id)));
+  }, [filteredListings]);
 
   const analyze = useCallback(async (coord: Coord) => {
     if (!inBounds(coord)) {
@@ -139,22 +145,17 @@ export default function ScoutPage() {
   }, []);
 
   const handlePick = useCallback((coord: Coord) => {
-    setMarker(coord);
-    setSelectedListingId(null);
+    setSelection(selectScoutAnalysisCoordinate(coord));
     setLatInput(coord.lat.toFixed(6));
     setLngInput(coord.lng.toFixed(6));
     void analyze(coord);
   }, [analyze]);
 
   const handleListingSelect = useCallback((listingId: number) => {
-    setSelectedListingId(listingId);
-    const listing = mapListings.find((item) => item.id === listingId);
-    if (listing) {
-      setMarker({ lat: listing.latitude, lng: listing.longitude });
-      setLatInput(listing.latitude.toFixed(6));
-      setLngInput(listing.longitude.toFixed(6));
-    }
-  }, [mapListings]);
+    setSelection(selectScoutListing(listingId));
+    setLatInput("");
+    setLngInput("");
+  }, []);
 
   function handleManualSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -165,8 +166,7 @@ export default function ScoutPage() {
       return;
     }
     const coord = { lat, lng };
-    setMarker(coord);
-    setSelectedListingId(null);
+    setSelection(selectScoutAnalysisCoordinate(coord));
     void analyze(coord);
   }
 
@@ -230,7 +230,7 @@ export default function ScoutPage() {
 
         <aside className="scout-map-column" aria-label="Lead map and coordinate analysis">
           <ScoutMap
-            marker={marker}
+            marker={analysisCoordinate}
             onPick={handlePick}
             listings={mapListings}
             selectedListingId={selectedListingId}

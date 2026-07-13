@@ -109,3 +109,79 @@ rechecked before final gates.
 None blocking. The raster basemap remains a network dependency; the verified
 fallback intentionally preserves cards, filters, and manual coordinate
 analysis when it is unavailable.
+
+## Independent review fix — RED to GREEN (14 July 2026)
+
+### RED evidence
+
+The independent review reproduced two runtime failures on the authenticated
+3001 Scout view:
+
+- selecting the RES3 lead and then filtering to RES2 left a stale
+  `.coordinate-marker` for the filtered-out lead, so one card disagreed with
+  two visible map overlays;
+- MapLibre replaced every pre-construction marker label with `Map marker`, and
+  listing selection created a second coordinate marker whose centre won
+  `document.elementFromPoint()` over the actionable listing marker.
+
+### Fix
+
+- Added executable pure selection transitions in `scout-selection.ts` so a
+  listing selection and an intentional analysis coordinate are mutually
+  exclusive. Filtering reconciles a hidden listing to the empty selection,
+  while a manual/map-picked coordinate survives unrelated filters.
+- Added executable marker helpers in `scout-marker.ts`. Listing labels are
+  restored after `Marker.addTo()` (the point where MapLibre overwrites them),
+  include listing ID, location, and score, and remain unique. Coordinate
+  markers are explicitly presentational and non-interactive.
+- Extended the signature smoke with executable selection and simulated
+  post-MapLibre accessibility assertions, rather than source-string checks
+  alone. No ownership, API, persistence, or map package contract changed.
+
+### GREEN evidence
+
+Fresh final source and runtime gates:
+
+| Gate | Result |
+|---|---|
+| `pnpm test:signature-views` | PASS — executable selection and marker contracts |
+| `pnpm test:ui-foundation` | PASS |
+| `pnpm --filter web typecheck` | PASS |
+| `pnpm --filter web lint` | PASS |
+| production-env `pnpm --filter web build` | PASS — 26/26 static pages |
+| `apps/worker/.venv/bin/python -m pytest tests` from `apps/worker` | PASS — 40/40 |
+| authenticated `pnpm test:api:workflow` on `127.0.0.1:3001` / worker `8001` | PASS with cleanup |
+| authenticated `pnpm test:auth-roles` on `127.0.0.1:3001` | PASS with cleanup |
+| scoped `git diff --check` | PASS |
+
+The first build probe correctly stopped at missing `DATABASE_URL`; the rerun
+mapped the live local Supabase `DB_URL` and passed. The first worker probes used
+the pytest console entry point, which did not place `apps/worker` on the import
+path; the project-correct `python -m pytest` invocation passed all 40 tests.
+
+### Authenticated browser regression
+
+The web and worker listener CWDs were re-confirmed as this validation worktree
+before a new Owner fixture signed in through the real `/login` form.
+
+- Baseline: 3 cards, 3 listing markers, and 3 unique descriptive names.
+- Listing selection: 0 coordinate markers; the selected marker label was
+  `Select listing 230: ERF 1247 · Noordwyk, Midrand; feasibility score 92 out of 100`;
+  `elementFromPoint()` at its centre returned that listing button.
+- Select RES3, then filter RES2: exactly 1 card, 1 listing marker (RES2),
+  0 coordinate markers, `1 of 3 listings`, and no retained selection.
+- Select RES2, then submit `-25.985000, 28.128000`: listing selection cleared;
+  exactly 1 coordinate marker remained with `aria-hidden="true"`,
+  `role="presentation"`, no label/tab index, and `pointer-events: none`.
+- 320px dark mode: three 288px cards at x=16..304, a 288px map,
+  `clientWidth === scrollWidth === 320`, and `data-mode="dark"`.
+- Controlled tile failure at 320px: one themed fallback, three usable cards,
+  and enabled latitude, longitude, and Analyse controls. The exact three CARTO
+  URLs were restored immediately; the refreshed view returned to 3 cards,
+  3 listing markers, and 0 fallbacks.
+- No app-origin console errors were present. The only browser errors were from
+  an unrelated Chrome extension.
+
+The isolated activity, reports, listings, team row, and auth user were deleted
+and absence-checked. The temporary viewport override and browser tab were
+cleaned up. No new web or worker process was started during this fix review.

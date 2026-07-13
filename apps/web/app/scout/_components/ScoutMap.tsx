@@ -6,6 +6,10 @@ import maplibregl, {
   type Marker,
   type StyleSpecification,
 } from "maplibre-gl";
+import {
+  addAccessibleListingMarker,
+  restoreCoordinateMarkerSemantics,
+} from "@/lib/scout-marker";
 
 const MAP_STYLE: StyleSpecification = {
   version: 8,
@@ -64,7 +68,6 @@ function createListingMarker(
   element.type = "button";
   element.className = `listing-marker listing-marker-${scoreBand(score)}${selected ? " is-selected" : ""}`;
   element.textContent = score === null ? "—" : String(score);
-  element.setAttribute("aria-label", `Select ${listing.address || listing.suburb || `listing ${listing.id}`}, score ${score ?? "not available"}`);
   element.addEventListener("click", (event) => {
     event.stopPropagation();
     onListingClick(listing.id);
@@ -162,12 +165,14 @@ export function ScoutMap({
     if (!map || status !== "ready") return;
 
     listingMarkersRef.current.forEach((marker) => marker.remove());
-    listingMarkersRef.current = listings.map((listing) => new maplibregl.Marker({
-      element: createListingMarker(listing, listing.id === selectedListingId, (listingId) => onListingClickRef.current(listingId)),
-      anchor: "center",
-    })
-      .setLngLat([listing.longitude, listing.latitude])
-      .addTo(map));
+    listingMarkersRef.current = listings.map((listing) => addAccessibleListingMarker(
+      new maplibregl.Marker({
+        element: createListingMarker(listing, listing.id === selectedListingId, (listingId) => onListingClickRef.current(listingId)),
+        anchor: "center",
+      }).setLngLat([listing.longitude, listing.latitude]),
+      map,
+      listing,
+    ));
 
     return () => {
       listingMarkersRef.current.forEach((marker) => marker.remove());
@@ -189,9 +194,11 @@ export function ScoutMap({
       const element = document.createElement("span");
       element.className = "coordinate-marker";
       element.setAttribute("aria-label", "Selected analysis coordinate");
-      coordinateMarkerRef.current = new maplibregl.Marker({ element, anchor: "center" })
+      const coordinateMarker = new maplibregl.Marker({ element, anchor: "center" })
         .setLngLat([marker.lng, marker.lat])
         .addTo(map);
+      restoreCoordinateMarkerSemantics(coordinateMarker.getElement());
+      coordinateMarkerRef.current = coordinateMarker;
     }
   }, [marker, status]);
 
