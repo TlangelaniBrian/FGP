@@ -137,5 +137,106 @@ exit 0
   authenticated role/workflow smokes are the valid security contract.
 - `supabase db lint` reports existing PostGIS extension-function diagnostics,
   but no Task 4 function or schema error and exits 0.
-- The final conservative ambiguous-name predicate hardening was not replayed in
-  the disposable database after its earlier complete replay, as noted above.
+
+## Independent review remediation
+
+Implementation commit: `84249da` (`fix(capital): preserve finalized governance state`).
+
+### RED evidence
+
+The authenticated governance smoke was extended before production edits and
+failed with all runtime review findings:
+
+```text
+RED one distinct concurrent correction co-signer applies exactly once atomically:
+duplicate idempotent correction requests emitted multiple activity events (2 !== 1)
+
+RED finalized correction accepts no new effective approvals:
+HTTP 200 appended a second member approval to an already approved correction
+
+RED removed contribution stays out of fresh effective ledger totals:
+fresh GET still included the removed contribution
+```
+
+The new disposable migration replay applied repository migrations 0001-0017,
+inserted approved/rejected legacy goal and correction proposals plus an
+unresolved pending correction maker, then applied the reviewed 0018. Its valid
+RED result was:
+
+```text
+ERROR: approved goal approvals were not preserved
+```
+
+The raw-container harness initially reached migration 0009 before its platform
+stubs were sent because `docker exec` lacked interactive stdin. Adding `-i`
+made the test exercise repository SQL and produced the intended backfill RED.
+
+### Fixes
+
+- Capital GET now excludes `status = 'removed'` from the effective ledger, so
+  refresh totals and leaderboards do not resurrect removed contributions; the
+  durable contribution row remains available for audit.
+- Migration 0018 now normalizes recognizable approvals for approved, rejected,
+  and pending legacy proposals. Historical goal approval members are added to
+  the normalized electorate before the composite foreign key is exercised.
+- Pending legacy corrections with no resolvable stable maker member ID are
+  changed to `rejected` before JSON approvals are dropped. The runtime service
+  also refuses any correction whose maker identity remains unresolved.
+- Goal and correction approval transactions return `changed`. Finalized
+  proposals return `changed: false` without inserting another approval or
+  reapplying effects. API activity is written only for a state-changing
+  approval, so concurrent duplicates produce at most one co-sign event.
+
+### GREEN evidence
+
+Fresh verification after the final code changes:
+
+```text
+pnpm test:capital-governance
+Capital governance smoke passed: reserved settings, stable approvals, RLS, concurrency, and atomic effects asserted.
+
+pnpm test:capital-governance:migration
+Capital governance migrations 0001-0018 replayed with legacy backfill assertions.
+
+pnpm test:auth-roles
+Authenticated role smoke passed: RLS, page boundary, Viewer controls, stable approvals, and cleanup asserted.
+
+pnpm test:api:workflow
+Authenticated workflow smoke passed: listing, feasibility, project, check-in, documents, capital, scraper, and team removal.
+
+pnpm --filter web typecheck
+exit 0
+
+pnpm --filter web lint
+exit 0
+
+pnpm --filter web build
+exit 0; 26/26 static pages generated
+
+PYTHONPATH=. apps/worker/.venv/bin/pytest -q
+40 passed in 0.61s
+
+git diff --check
+exit 0
+```
+
+The exact disposable replay supplies only the Supabase platform objects absent
+from the raw Postgres image (`storage.buckets`, `auth.uid()`, and `auth.jwt()`),
+then runs the checked-in migration files unchanged. Assertions cover completed
+goal/correction approval counts, unresolved-maker rejection, and JSON-column
+removal.
+
+### Self-review and concerns
+
+- Completed historical approvals remain audit evidence only; no migration path
+  promotes an incomplete proposal to approved.
+- The unresolved-maker check is fail-closed in both migration and runtime.
+- Proposal row locks serialize concurrent approval requests; only the request
+  that inserts an approval can apply an effect or emit activity.
+- Removed contribution records remain in the database and are excluded only
+  from the effective Capital response.
+- No production fault-injection hook was added for a forced mid-transaction
+  rollback test. Doing so would expand the trusted mutation surface; the
+  existing concurrency checks and transaction-scoped persisted-state
+  assertions remain the atomicity evidence.
+- Pre-existing `.superpowers/audits/` artifacts remain untracked and untouched.
