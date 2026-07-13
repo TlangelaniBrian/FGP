@@ -60,7 +60,7 @@ export function PortalChrome({ colourMode, visualDirection, onColourModeChange, 
           <button
             type="button"
             className="icon-button colour-mode-button"
-            aria-label={`Switch to ${colourMode === "dark" ? "light" : "dark"} colour mode`}
+            aria-label="Dark colour mode"
             aria-pressed={colourMode === "dark"}
             onClick={() => {
               const nextMode: ColourMode = colourMode === "dark" ? "light" : "dark";

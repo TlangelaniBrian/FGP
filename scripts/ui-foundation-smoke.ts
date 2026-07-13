@@ -52,11 +52,52 @@ async function main(): Promise<void> {
   const { formatZar } = await import(pathToFileURL(path.join(root, formatterPath)).href);
   assert.equal(formatZar(1234.5), "R 1 234.50", "formatZar must use spaces and exactly two decimals");
 
+  const portalStatePath = "apps/web/lib/portal-state.ts";
+  const portalState = source(portalStatePath);
   const appShell = source("apps/web/app/_components/AppShell.tsx");
-  assert.match(appShell, /fgp_colour_mode/, "AppShell must persist colour mode independently");
-  assert.match(appShell, /fgp_visual_direction/, "AppShell must persist visual direction independently");
+  assert.match(`${appShell}\n${portalState}`, /fgp_colour_mode/, "AppShell must persist colour mode independently");
+  assert.match(`${appShell}\n${portalState}`, /fgp_visual_direction/, "AppShell must persist visual direction independently");
   assert.match(appShell, /useState<ColourMode>/, "AppShell must expose ColourMode state");
   assert.match(appShell, /useState<VisualDirection>/, "AppShell must expose VisualDirection state");
+  assert.match(appShell, /useState<ColourMode>\(["']light["']\)/, "AppShell colour state must render deterministically as light");
+  assert.match(appShell, /useState<VisualDirection>\(["']classic["']\)/, "AppShell direction state must render deterministically as classic");
+  assert.doesNotMatch(appShell, /useState<(?:ColourMode|VisualDirection)>\([^)]*readPortalPreference/, "AppShell state initializers must not read browser storage");
+  assert.match(appShell, /useEffect\([\s\S]*readColourModePreference\(\)[\s\S]*readVisualDirectionPreference\(\)/, "AppShell must load validated preferences after mount");
+
+  const rootLayout = source("apps/web/app/layout.tsx");
+  assert.match(rootLayout, /suppressHydrationWarning/, "Root layout must tolerate the validated pre-paint preference attributes");
+  assert.match(rootLayout, /data-mode=["']light["']/, "Root layout must render a deterministic light default");
+  assert.match(rootLayout, /data-dir=["']classic["']/, "Root layout must render a deterministic classic default");
+  assert.match(rootLayout, /COLOUR_MODE_PREFERENCE_KEY[\s\S]*VISUAL_DIRECTION_PREFERENCE_KEY/, "Root layout must bootstrap both presentation preferences before paint");
+  assert.match(rootLayout, /localStorage[\s\S]*(?:includes|Set)[\s\S]*dataset\.mode[\s\S]*dataset\.dir/, "Pre-paint bootstrap must validate and apply both root attributes");
+
+  assert.match(portalState, /isColourMode/, "portal-state must expose a runtime colour-mode guard");
+  assert.match(portalState, /isVisualDirection/, "portal-state must expose a runtime visual-direction guard");
+  const preferenceModule = await import(pathToFileURL(path.join(root, portalStatePath)).href);
+  assert.equal(typeof preferenceModule.isColourMode, "function", "Colour-mode validation must be executable at runtime");
+  assert.equal(typeof preferenceModule.isVisualDirection, "function", "Direction validation must be executable at runtime");
+  assert.equal(preferenceModule.isColourMode("dark"), true, "dark must be a valid colour mode");
+  assert.equal(preferenceModule.isColourMode("sepia"), false, "unknown colour modes must be rejected");
+  assert.equal(preferenceModule.isVisualDirection("bold"), true, "bold must be a valid visual direction");
+  assert.equal(preferenceModule.isVisualDirection("compact"), false, "unknown visual directions must be rejected");
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem(key: string) {
+          return key === "fgp_colour_mode" ? JSON.stringify("sepia") : JSON.stringify("compact");
+        },
+      },
+    },
+  });
+  try {
+    assert.equal(preferenceModule.readColourModePreference(), "light", "Invalid stored colour modes must fall back to light");
+    assert.equal(preferenceModule.readVisualDirectionPreference(), "classic", "Invalid stored directions must fall back to classic");
+  } finally {
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
 
   const portalChrome = source("apps/web/app/_components/PortalChrome.tsx");
   const colourModeControl = portalChrome.match(/<button\b[\s\S]*?<\/button>/g)?.find((button) => (
@@ -65,7 +106,7 @@ async function main(): Promise<void> {
   ));
   assert.ok(colourModeControl, "PortalChrome must render one button whose handler toggles ColourMode");
   assert.match(colourModeControl, /aria-pressed=/, "The colour-mode button must expose its pressed state");
-  assert.match(colourModeControl, /aria-label=[^>]*(?:colour|dark|light)/i, "The colour-mode button must have an explicit accessible name");
+  assert.match(colourModeControl, /aria-label=["']Dark colour mode["']/, "The colour-mode button must have a stable accessible name");
   assert.match(colourModeControl, /<PortalIcon\b[\s\S]*\/?>/, "The colour-mode button must contain PortalIcon");
   assert.match(portalChrome, /\bColourMode\b/, "PortalChrome must type the colour-mode control with ColourMode");
 
