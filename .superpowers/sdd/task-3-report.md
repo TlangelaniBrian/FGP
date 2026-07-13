@@ -206,3 +206,32 @@ Review self-check confirmed the migration backfill is conservative, all new
 report evidence comes only from the validated worker response, non-2026 bundles
 cannot reach the fallback, temporary zoning fixtures reconcile and clean up,
 and the pre-existing `.superpowers/audits/` directory remains untouched.
+
+## Decimal tariff precision follow-up
+
+Implementation commit: `0c7e001` (`fix(tariffs): preserve decimal precision`).
+
+The final review finding was reproduced with a focused RED assertion: a JSONB
+build rate of `14200.25` emerged from worker parsing as `14200`. Tariff value
+maps are now typed and parsed as floats for build rates, unit sizes, and market
+rents, matching the Next Zod contract that accepts positive decimal numbers.
+No integer coercion remains in the DB-row parsing path.
+
+Round-trip coverage now writes a complete decimal 2029 bundle through
+`PUT /api/tariffs`, reads the JSONB rows through the worker, and verifies exact
+`build_rate_per_sqm=14200.25`, `rent_per_unit_monthly=6500.75`, and build cost
+from `55.25 m²` units after normal two-decimal monetary rounding. The workflow
+snapshots and restores any prior 2029 rows; the local post-run state was verified
+empty.
+
+Precision follow-up GREEN evidence:
+
+- Focused decimal regression: `1 passed`.
+- Full worker suite: `40 passed in 0.64s`.
+- Authenticated workflow and role smokes: passed with 120-second limits.
+- Web typecheck, ESLint, and production build: passed (26/26 pages).
+- Ruff passed; Pyright reported `0 errors, 0 warnings`; `git diff --check` passed.
+
+No schema migration was needed because tariff payloads are JSONB and feasibility
+monetary report columns are already numeric. Existing integer tariff values
+remain valid and compare identically as floats.
