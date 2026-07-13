@@ -110,6 +110,69 @@ def test_db_tariffs_change_feasibility_output():
     assert r_pricey["cost_build"] > r_default["cost_build"]
 
 
+def test_decimal_tariffs_retain_precision_through_parsing_and_calculation():
+    rows = {
+        "build_rates": {
+            "bachelor": 13_500.75,
+            "1bed": 14_200.25,
+            "2bed": 15_000.5,
+            "luxury": 18_500.125,
+        },
+        "unit_sizes": {"bachelor": 35.5, "1bed": 55.25, "2bed": 85.75, "luxury": 120.5},
+        "market_rents": {
+            "bachelor": 4_500.5,
+            "1bed": 6_500.75,
+            "2bed": 9_500.25,
+            "luxury": 18_000.5,
+        },
+        "bulk_contributions": {
+            "johannesburg": {
+                "bachelor": [45_000, 65_000],
+                "1bed": [50_000, 65_000],
+                "2bed": [55_000, 65_000],
+                "luxury": [65_000, 80_000],
+            },
+            "tshwane": {
+                "bachelor": [38_000, 55_000],
+                "1bed": [42_000, 55_000],
+                "2bed": [46_000, 55_000],
+                "luxury": [55_000, 70_000],
+            },
+            "ekurhuleni": {
+                "bachelor": [40_000, 58_000],
+                "1bed": [44_000, 58_000],
+                "2bed": [48_000, 58_000],
+                "luxury": [58_000, 73_000],
+            },
+        },
+        "transfer_duty_brackets": [
+            [1_100_000, 0, 0],
+            [1_512_500, 0.03, 0],
+            [None, 0.13, 1_128_600],
+        ],
+        "fees": {"professional_fee_pct": 0.12},
+    }
+
+    tariffs = tariffs_from_rows(2029, rows)
+    assert tariffs.build_rates["1bed"] == 14_200.25
+    assert tariffs.unit_sizes["1bed"] == 55.25
+    assert tariffs.market_rents["1bed"] == 6_500.75
+
+    result = calculate_feasibility_score(
+        land_price=1_000_000,
+        size_sqm=2_000,
+        unit_type="1bed",
+        target_units=2,
+        municipality="johannesburg",
+        zone_rules={"far": 1.0, "max_units_per_erf": 2},
+        tariff_year=2029,
+        tariffs=tariffs,
+    )
+    assert result["cost_build"] == round(2 * 55.25 * 14_200.25, 2)
+    assert result["rent_per_unit_monthly"] == 6_500.75
+    assert result["gross_monthly_income"] == 2 * 6_500.75
+
+
 def test_default_tariffs_matches_legacy_numbers():
     # Regression guard: feasibility output with default tariffs must be stable.
     result = calculate_feasibility_score(

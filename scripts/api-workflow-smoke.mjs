@@ -17,6 +17,7 @@ let listingId;
 let reportId;
 let projectId;
 let priorSettings;
+let priorDecimalTariffs;
 const createdRecords = [];
 const createdRecordKeys = new Set();
 
@@ -191,6 +192,13 @@ async function cleanup() {
     ["record deletion and absence checks", cleanupRecords],
     ["actor activity cleanup", cleanupActivity],
     ["settings restoration", restoreSettings],
+    ["decimal tariff restoration", async () => {
+      if (!priorDecimalTariffs) return;
+      await supabase("/rest/v1/tariffs?tariff_year=eq.2029", { method: "DELETE" });
+      if (priorDecimalTariffs.length) {
+        await supabase("/rest/v1/tariffs", { method: "POST", body: JSON.stringify(priorDecimalTariffs) });
+      }
+    }],
     ["team cleanup", cleanupTeam],
     ["auth cleanup", cleanupAuth],
   ]);
@@ -232,6 +240,25 @@ try {
   assert.equal(result.response.status, 422, JSON.stringify(result.payload));
   const buildRatesAfterInvalidWrite = await supabase("/rest/v1/tariffs?tariff_year=eq.2026&category=eq.build_rates&select=data");
   assert.deepEqual(buildRatesAfterInvalidWrite, existingBuildRates, "invalid tariff payload was persisted");
+
+  priorDecimalTariffs = await supabase("/rest/v1/tariffs?tariff_year=eq.2029&select=*");
+  const decimalTariffs = [
+    ["build_rates", { bachelor: 13500.75, "1bed": 14200.25, "2bed": 15000.5, luxury: 18500.125 }],
+    ["unit_sizes", { bachelor: 35.5, "1bed": 55.25, "2bed": 85.75, luxury: 120.5 }],
+    ["market_rents", { bachelor: 4500.5, "1bed": 6500.75, "2bed": 9500.25, luxury: 18000.5 }],
+    ["bulk_contributions", { johannesburg: { bachelor: [45000, 65000], "1bed": [50000, 65000], "2bed": [55000, 65000], luxury: [65000, 80000] }, tshwane: { bachelor: [38000, 55000], "1bed": [42000, 55000], "2bed": [46000, 55000], luxury: [55000, 70000] }, ekurhuleni: { bachelor: [40000, 58000], "1bed": [44000, 58000], "2bed": [48000, 58000], luxury: [58000, 73000] } }],
+    ["transfer_duty_brackets", [[1100000, 0, 0], [1512500, 0.03, 0], [null, 0.13, 1128600]]],
+    ["fees", { professional_fee_pct: 0.12 }],
+  ];
+  for (const [category, data] of decimalTariffs) {
+    result = await api("/api/tariffs", token, { method: "PUT", body: JSON.stringify({ year: 2029, category, data }) });
+    assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+  }
+  result = await api("/api/feasibility", token, { method: "POST", body: JSON.stringify({ ...canonicalFeasibility, tariff_year: 2029 }) });
+  assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+  assert.equal(result.payload.build_rate_per_sqm, 14200.25);
+  assert.equal(result.payload.rent_per_unit_monthly, 6500.75);
+  assert.equal(result.payload.cost_build, Math.round(5 * 55.25 * 14200.25 * 100) / 100);
 
   result = await api("/api/feasibility/save", token, { method: "POST", body: JSON.stringify(canonicalFeasibility) });
   assert.equal(result.response.status, 200, JSON.stringify(result.payload));

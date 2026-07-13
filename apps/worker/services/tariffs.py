@@ -39,14 +39,14 @@ class TariffValidationError(ValueError):
 
 
 # --- Fallback constants (mirror the 2026 DB seed) --------------------------------
-BUILD_RATES_2026: dict[str, int] = {
+BUILD_RATES_2026: dict[str, float] = {
     "bachelor": 13_500,
     "1bed": 14_200,
     "2bed": 15_000,
     "luxury": 18_500,
 }
 
-UNIT_SIZES: dict[str, int] = {
+UNIT_SIZES: dict[str, float] = {
     "bachelor": 35,
     "1bed": 55,
     "2bed": 85,
@@ -55,7 +55,7 @@ UNIT_SIZES: dict[str, int] = {
 
 # Flat {unit_type: monthly_rent}. The legacy calculations module nested these
 # under a "default" key; the DB stores them flat, so this is the canonical shape.
-MARKET_RENT_2026: dict[str, int] = {
+MARKET_RENT_2026: dict[str, float] = {
     "bachelor": 4_500,
     "1bed": 6_500,
     "2bed": 9_500,
@@ -99,9 +99,9 @@ PROFESSIONAL_FEE_PCT = 0.12
 @dataclass(frozen=True)
 class Tariffs:
     year: int
-    build_rates: dict[str, int]
-    unit_sizes: dict[str, int]
-    market_rents: dict[str, int]
+    build_rates: dict[str, float]
+    unit_sizes: dict[str, float]
+    market_rents: dict[str, float]
     bulk_contributions: dict[str, dict[str, tuple[float, float]]]
     transfer_duty_brackets: list[tuple[float, float, float]]
     professional_fee_pct: float
@@ -165,8 +165,8 @@ def _parse_bulk(raw: Any) -> dict[str, dict[str, tuple[float, float]]]:
     return parsed
 
 
-def _parse_unit_values(raw: Any) -> dict[str, int]:
-    parsed = {key: int(value) for key, value in raw.items()}
+def _parse_unit_values(raw: Any) -> dict[str, float]:
+    parsed = {key: float(value) for key, value in raw.items()}
     if set(parsed) != UNIT_TYPES or any(value <= 0 for value in parsed.values()):
         raise ValueError("tariff category requires positive values for all supported unit types")
     return parsed
