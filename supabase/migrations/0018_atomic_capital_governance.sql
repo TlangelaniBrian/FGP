@@ -98,7 +98,35 @@ INSERT INTO capital_goal_electorate (proposal_id, member_id, member_name, member
 SELECT proposal.id, member.id, member.name, member.role
 FROM capital_goal_proposals proposal
 JOIN team_members member ON member.id = proposal.proposed_by_member_id
-WHERE proposal.status = 'pending'
+ON CONFLICT DO NOTHING;
+
+-- Preserve completed legacy audit evidence by adding each recognizable
+-- approval member to that proposal's historical electorate before the
+-- normalized approval foreign key is enforced.
+INSERT INTO capital_goal_electorate (proposal_id, member_id, member_name, member_role)
+SELECT DISTINCT proposal.id, member.id, current_member.name, current_member.role
+FROM capital_goal_proposals proposal
+CROSS JOIN LATERAL jsonb_array_elements_text(
+  CASE WHEN jsonb_typeof(proposal.approvals) = 'array' THEN proposal.approvals ELSE '[]'::jsonb END
+) legacy(value)
+JOIN LATERAL (
+  SELECT candidate.id
+  FROM team_members candidate
+  WHERE candidate.id::text = legacy.value
+    OR candidate.user_id::text = legacy.value
+    OR (
+      lower(candidate.name) = lower(legacy.value)
+      AND (
+        SELECT count(*) FROM team_members named
+        WHERE lower(named.name) = lower(legacy.value)
+      ) = 1
+    )
+  ORDER BY
+    (candidate.id::text = legacy.value OR candidate.user_id::text = legacy.value) DESC,
+    candidate.id
+  LIMIT 1
+) member ON true
+JOIN team_members current_member ON current_member.id = member.id
 ON CONFLICT DO NOTHING;
 
 INSERT INTO capital_goal_approvals (proposal_id, member_id)
@@ -126,8 +154,13 @@ JOIN LATERAL (
 ) member ON true
 JOIN capital_goal_electorate electorate
   ON electorate.proposal_id = proposal.id AND electorate.member_id = member.id
-WHERE proposal.status = 'pending'
 ON CONFLICT DO NOTHING;
+
+-- A pending correction without a stable maker cannot satisfy maker-checker.
+-- Quarantine it instead of allowing an arbitrary active member to approve it.
+UPDATE capital_correction_proposals
+SET status = 'rejected'
+WHERE status = 'pending' AND proposed_by_member_id IS NULL;
 
 INSERT INTO capital_correction_approvals (proposal_id, member_id)
 SELECT DISTINCT proposal.id, member.id
@@ -152,8 +185,7 @@ JOIN LATERAL (
     candidate.id
   LIMIT 1
 ) member ON true
-WHERE proposal.status = 'pending'
-  AND member.id IS DISTINCT FROM proposal.proposed_by_member_id
+WHERE member.id IS DISTINCT FROM proposal.proposed_by_member_id
 ON CONFLICT DO NOTHING;
 
 ALTER TABLE capital_goal_proposals DROP COLUMN approvals;

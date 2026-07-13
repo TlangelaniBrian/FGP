@@ -9,6 +9,7 @@
     "test:api:workflow": "node scripts/api-workflow-smoke.mjs",
     "test:auth-roles": "node scripts/auth-role-smoke.mjs",
     "test:capital-governance": "node scripts/capital-governance-smoke.mjs",
+    "test:capital-governance:migration": "bash scripts/capital-governance-migration-replay.sh",
     "check:production": "node scripts/production-preflight.mjs",
     "migrate:production": "./scripts/migrate-production.sh",
     "typecheck": "pnpm --filter web run typecheck",

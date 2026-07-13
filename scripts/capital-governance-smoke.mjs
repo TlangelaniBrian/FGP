@@ -286,6 +286,8 @@ try {
       api("/api/capital", analyst.token, { method: "POST", body: JSON.stringify({ action: "approve-correction", proposalId: correction.id }) }),
     ]);
     assert(results.every(({ response }) => response.status === 200), JSON.stringify(results.map(({ response, payload }) => [response.status, payload])));
+    assert.equal(results.filter(({ payload }) => payload.changed === true).length, 1);
+    assert.equal(results.filter(({ payload }) => payload.changed === false).length, 1);
     const approvals = await admin(`/rest/v1/capital_correction_approvals?proposal_id=eq.${correction.id}&select=member_id`);
     assert.deepEqual(approvals, [{ member_id: analyst.memberId }]);
     const [proposal] = await admin(`/rest/v1/capital_correction_proposals?id=eq.${correction.id}&select=status`);
@@ -294,6 +296,50 @@ try {
     assert.equal(Number(contribution.amount), 575);
     assert.equal(contribution.note, `Corrected ${runId}`);
     assert.equal(contribution.status, "corrected");
+    const activity = await admin(`/rest/v1/activity_events?event_type=eq.correction_cosign&entity_type=eq.capital_correction&entity_id=eq.${correction.id}&select=id`);
+    assert.equal(activity.length, 1, "duplicate idempotent correction requests emitted multiple activity events");
+  });
+
+  await check("finalized correction accepts no new effective approvals", async () => {
+    assert(correction);
+    const before = await admin(`/rest/v1/capital_correction_approvals?proposal_id=eq.${correction.id}&select=member_id`);
+    const result = await api("/api/capital", treasurer.token, {
+      method: "POST",
+      body: JSON.stringify({ action: "approve-correction", proposalId: correction.id }),
+    });
+    assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+    assert.equal(result.payload.changed, false);
+    const after = await admin(`/rest/v1/capital_correction_approvals?proposal_id=eq.${correction.id}&select=member_id`);
+    assert.deepEqual(after, before);
+  });
+
+  await check("removed contribution stays out of fresh effective ledger totals", async () => {
+    const baseline = await api("/api/capital", owner.token);
+    assert.equal(baseline.response.status, 200, JSON.stringify(baseline.payload));
+    const baselineTotal = baseline.payload.contributions.reduce((sum, row) => sum + Number(row.amount), 0);
+    const contribution = await api("/api/capital", owner.token, {
+      method: "POST",
+      body: JSON.stringify({ action: "contribution", amount: 625, note: `Remove ${runId}` }),
+    });
+    assert.equal(contribution.response.status, 201, JSON.stringify(contribution.payload));
+    createdContributions.push(contribution.payload.id);
+    const proposal = await api("/api/capital", owner.token, {
+      method: "POST",
+      body: JSON.stringify({ action: "correction", contributionId: contribution.payload.id, correctionAction: "remove", proposedNote: `Remove ${runId}` }),
+    });
+    assert.equal(proposal.response.status, 201, JSON.stringify(proposal.payload));
+    createdCorrectionProposals.push(proposal.payload.id);
+    const approval = await api("/api/capital", treasurer.token, {
+      method: "POST",
+      body: JSON.stringify({ action: "approve-correction", proposalId: proposal.payload.id }),
+    });
+    assert.equal(approval.response.status, 200, JSON.stringify(approval.payload));
+    const fresh = await api("/api/capital", owner.token);
+    assert.equal(fresh.response.status, 200, JSON.stringify(fresh.payload));
+    assert.equal(fresh.payload.contributions.some((row) => row.id === contribution.payload.id), false);
+    assert.equal(fresh.payload.contributions.reduce((sum, row) => sum + Number(row.amount), 0), baselineTotal, "removed amount still contributes to effective total");
+    const [auditRow] = await admin(`/rest/v1/capital_contributions?id=eq.${contribution.payload.id}&select=status`);
+    assert.equal(auditRow.status, "removed", "removal audit row was not retained");
   });
 
   await check("active members can read but cannot directly mutate governance records", async () => {

@@ -74,6 +74,15 @@
 - [x] Apply the migration locally and run the complete Task 4 GREEN verification matrix.
 - [x] Self-review, write the Task 4 report, and commit locally without pushing.
 
+## Task 4 independent review remediation (2026-07-13)
+
+- [x] Capture RED for removed-ledger refresh, finalized approvals/activity, completed legacy approval history, and unresolved-maker quarantine.
+- [x] Filter removed contributions from the effective ledger while retaining audit rows.
+- [x] Preserve recognizable approved/rejected legacy approvals and reject unresolved pending correction makers during migration.
+- [x] Return approval state-change flags and suppress duplicate approval activity events.
+- [x] Replay exact migrations 0001-0018 and run the full authenticated verification matrix.
+- [x] Append review evidence, self-review, and commit locally without pushing.
+
 ## Review
 
 Implemented the shared Capitec-style shell, route-aware navigation, visual

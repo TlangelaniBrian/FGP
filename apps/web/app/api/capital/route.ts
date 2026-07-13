@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, ne } from "drizzle-orm";
 import { db, capitalContributions, portalSettings, teamMembers } from "@fgp/database";
 import { getAuthenticatedActor, requireSessionCapability } from "@/lib/portal-auth";
 import { recordActivity } from "@/lib/activity";
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
   const [contributions, goalSetting, goalProposal, corrections, governingMembers] = await Promise.all([
-    db.select().from(capitalContributions).orderBy(desc(capitalContributions.contributionDate), desc(capitalContributions.createdAt)),
+    db.select().from(capitalContributions).where(ne(capitalContributions.status, "removed")).orderBy(desc(capitalContributions.contributionDate), desc(capitalContributions.createdAt)),
     db.select().from(portalSettings).where(eq(portalSettings.key, "capital_goal")),
     getPendingGoalProposal(),
     getPendingCorrectionProposals(),
@@ -104,15 +104,17 @@ export async function POST(req: NextRequest) {
       if (guard.response) return guard.response;
       if (!body.proposalId) return NextResponse.json({ error: "proposalId is required" }, { status: 422 });
       const proposal = await approveGoalProposal(guard.actor!, body.proposalId);
-      await recordActivity({
-        actorUserId: guard.actor!.userId,
-        actorName: guard.actor!.name,
-        eventType: "goal_cosign",
-        title: proposal.approved ? "Capital goal approved" : "Capital goal co-signed",
-        detail: `Proposal #${proposal.id}`,
-        entityType: "capital_goal_proposal",
-        entityId: proposal.id,
-      });
+      if (proposal.changed) {
+        await recordActivity({
+          actorUserId: guard.actor!.userId,
+          actorName: guard.actor!.name,
+          eventType: "goal_cosign",
+          title: proposal.approved ? "Capital goal approved" : "Capital goal co-signed",
+          detail: `Proposal #${proposal.id}`,
+          entityType: "capital_goal_proposal",
+          entityId: proposal.id,
+        });
+      }
       return NextResponse.json(proposal);
     }
 
@@ -148,15 +150,17 @@ export async function POST(req: NextRequest) {
       if (guard.response) return guard.response;
       if (!body.proposalId) return NextResponse.json({ error: "proposalId is required" }, { status: 422 });
       const proposal = await approveCorrectionProposal(guard.actor!, body.proposalId);
-      await recordActivity({
-        actorUserId: guard.actor!.userId,
-        actorName: guard.actor!.name,
-        eventType: "correction_cosign",
-        title: "Contribution correction approved",
-        detail: `Proposal #${proposal.id}`,
-        entityType: "capital_correction",
-        entityId: proposal.id,
-      });
+      if (proposal.changed) {
+        await recordActivity({
+          actorUserId: guard.actor!.userId,
+          actorName: guard.actor!.name,
+          eventType: "correction_cosign",
+          title: "Contribution correction approved",
+          detail: `Proposal #${proposal.id}`,
+          entityType: "capital_correction",
+          entityId: proposal.id,
+        });
+      }
       return NextResponse.json(proposal);
     }
     return NextResponse.json({ error: "unknown action" }, { status: 400 });

@@ -172,10 +172,15 @@ export async function approveGoalProposal(actor: PortalActor, proposalId: number
       .where(and(eq(capitalGoalElectorate.proposalId, proposalId), eq(capitalGoalElectorate.memberId, actor.memberId)))
       .limit(1);
     if (!eligible) throw new CapitalGovernanceError("actor is not in this proposal electorate", 403);
-    await tx
+    if (proposal.status === "approved") {
+      return { approved: true, changed: false, ...(await goalProposalResponse(tx, proposalId)) };
+    }
+    const inserted = await tx
       .insert(capitalGoalApprovals)
       .values({ proposalId, memberId: actor.memberId })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ memberId: capitalGoalApprovals.memberId });
+    const changed = inserted.length > 0;
 
     const [[required], [approvalCount]] = await Promise.all([
       tx
@@ -198,7 +203,7 @@ export async function approveGoalProposal(actor: PortalActor, proposalId: number
           set: { value: Number(proposal.newAmount), updatedBy: actor.name, updatedAt: new Date() },
         });
     }
-    return { approved, ...(await goalProposalResponse(tx, proposalId)) };
+    return { approved, changed, ...(await goalProposalResponse(tx, proposalId)) };
   });
 }
 
@@ -240,10 +245,16 @@ export async function approveCorrectionProposal(actor: PortalActor, proposalId: 
       .where(eq(capitalCorrectionProposals.id, proposalId))
       .limit(1);
     if (!proposal) throw new CapitalGovernanceError("correction proposal not found", 404);
+    if (proposal.proposedByMemberId == null) {
+      throw new CapitalGovernanceError("correction proposal requires a stable maker identity", 409);
+    }
     if (proposal.proposedByMemberId === actor.memberId) {
       throw new CapitalGovernanceError("proposal maker cannot approve their own correction", 403);
     }
     if (proposal.status === "rejected") throw new CapitalGovernanceError("correction proposal is no longer pending", 409);
+    if (proposal.status === "approved") {
+      return { approved: true, changed: false, ...(await correctionProposalResponse(tx, proposalId)) };
+    }
 
     const [eligible] = await tx
       .select({ memberId: teamMembers.id })
@@ -255,12 +266,14 @@ export async function approveCorrectionProposal(actor: PortalActor, proposalId: 
       ))
       .limit(1);
     if (!eligible) throw new CapitalGovernanceError("actor is not an eligible co-signer", 403);
-    await tx
+    const inserted = await tx
       .insert(capitalCorrectionApprovals)
       .values({ proposalId, memberId: actor.memberId })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ memberId: capitalCorrectionApprovals.memberId });
+    const changed = inserted.length > 0;
 
-    if (proposal.status === "pending") {
+    if (changed) {
       if (proposal.action === "remove") {
         await tx
           .update(capitalContributions)
@@ -281,7 +294,7 @@ export async function approveCorrectionProposal(actor: PortalActor, proposalId: 
         .set({ status: "approved" })
         .where(eq(capitalCorrectionProposals.id, proposalId));
     }
-    return { approved: true, ...(await correctionProposalResponse(tx, proposalId)) };
+    return { approved: true, changed, ...(await correctionProposalResponse(tx, proposalId)) };
   });
 }
 
