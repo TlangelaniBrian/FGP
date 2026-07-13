@@ -18,6 +18,16 @@ function sourceFiles(relativeDirectory: string): string[] {
   });
 }
 
+const genericMotionToken = /(?<![\w-])(?:transition(?:-(?:all|colors|opacity|shadow|transform))?|ease-[\w-]+)(?![\w-])/;
+
+function genericMotionOffenders(sourceText: string): Array<{ line: string; lineNumber: number }> {
+  return sourceText.split("\n").flatMap((line, index) => (
+    genericMotionToken.test(line)
+      ? [{ line, lineNumber: index + 1 }]
+      : []
+  ));
+}
+
 function blocksAfter(sourceText: string, startPattern: RegExp): string[] {
   const flags = startPattern.flags.includes("g") ? startPattern.flags : `${startPattern.flags}g`;
   const matcher = new RegExp(startPattern.source, flags);
@@ -226,23 +236,18 @@ async function main(): Promise<void> {
   }
   assert.doesNotMatch(globals, /\.button:hover\s*\{[^}]*translateY/, "Buttons must not translate on hover");
 
-  const genericMotionClass = /\b(?:transition-(?:colors|all)|ease-[\w-]+)\b/;
-  for (const relativePath of sourceFiles("apps/web/app")) {
-    for (const [index, line] of source(relativePath).split("\n").entries()) {
-      if (!genericMotionClass.test(line)) continue;
-      assert.match(
-        line,
-        /\b(?:portal-transition|button)\b/,
-        `${relativePath}:${index + 1} must use the shared portal-transition/button contract instead of generic Tailwind motion`,
-      );
-    }
-  }
+  const inlineButtonFixture = '<button className="transition-colors">Save</button>';
+  assert.equal(genericMotionOffenders(inlineButtonFixture).length, 1, "The motion scanner must reject generic motion on an inline JSX button");
+  const portalMotionOffenders = sourceFiles("apps/web/app").flatMap((relativePath) => (
+    genericMotionOffenders(source(relativePath)).map((offender) => ({ relativePath, ...offender }))
+  ));
+  assert.deepEqual(portalMotionOffenders, [], "Portal source must contain zero generic Tailwind motion/easing offenders");
   for (const relativePath of [
     "apps/web/app/settings/tariffs/page.tsx",
     "apps/web/app/projects/[id]/_components/ThisWeek.tsx",
     "apps/web/app/projects/[id]/_components/CheckInModal.tsx",
   ]) {
-    assert.doesNotMatch(source(relativePath), genericMotionClass, `${relativePath} must not retain generic Tailwind motion classes`);
+    assert.deepEqual(genericMotionOffenders(source(relativePath)), [], `${relativePath} must not retain generic Tailwind motion classes`);
   }
   assert.match(
     globals,

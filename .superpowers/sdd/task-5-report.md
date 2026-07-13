@@ -210,3 +210,48 @@ activity, and auth user were deleted and each was verified absent.
   the shared 160ms easing contract.
 - The stronger selector changes only semantic success stat values; ordinary
   stat values retain selected ink.
+
+## Final motion-scanner test-quality fix
+
+The final re-review found that the recursive motion scan still allowed an
+inline JSX `<button>` because it treated the tag name as evidence of the shared
+`.button` class. This follow-up changes only the smoke and this report.
+
+### Synthetic RED evidence
+
+The scanner was first refactored into the pure `genericMotionOffenders` helper
+while retaining the faulty allowance. An in-memory fixture was added without
+changing any portal source:
+
+```text
+<button className="transition-colors">Save</button>
+```
+
+`pnpm test:ui-foundation` then exited 1 as required:
+
+```text
+AssertionError [ERR_ASSERTION]: The motion scanner must reject generic motion on an inline JSX button
+0 !== 1
+```
+
+### Fix and GREEN evidence
+
+The bare tag/class allowance was removed. The pure scanner now reports every
+generic Tailwind transition or easing token unconditionally, including
+`transition`, `transition-all`, `transition-colors`, `transition-opacity`,
+`transition-shadow`, `transition-transform`, and `ease-*`. The synthetic
+fixture must produce one offender, and the recursive scan over every `.ts` and
+`.tsx` file under `apps/web/app` must produce zero offenders.
+
+| Gate | Result |
+|---|---|
+| `pnpm test:ui-foundation` | PASS — fixture rejected and current portal source has zero offenders |
+| `pnpm --filter web typecheck` | PASS — exit 0 |
+| `pnpm --filter web lint` | PASS — exit 0 |
+| local Supabase placeholder environment `pnpm --filter web build` | PASS — compiled and generated 26/26 pages; documented warnings only |
+| `git diff --check HEAD -- . ':(exclude)apps/web/public/brand/capitec-c-mark.svg'` | PASS before commit |
+| canonical C-mark `cmp -s` against the handoff asset | PASS — exit 0 |
+
+No production component, stylesheet, API, actor, capability, persistence,
+route, or calculation behavior changed. The recursive assertion no longer has
+an exception path that can be satisfied by JSX syntax.
