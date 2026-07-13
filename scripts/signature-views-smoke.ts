@@ -244,6 +244,82 @@ assert.doesNotMatch(massing, /#E61414/i, "Massing boundaries must never use C-ma
 const layout = source("apps/web/app/layout.tsx");
 assert.match(layout, /maplibre-gl\/dist\/maplibre-gl\.css/, "The root layout must import packaged MapLibre CSS");
 
+const costBreakdownPath = path.join(root, "apps/web/app/evaluate/result/_components/CostBreakdownBars.tsx");
+assert.ok(existsSync(costBreakdownPath), "Cost Oracle must expose the pure CostBreakdownBars component");
+const costBreakdown = await import(pathToFileURL(costBreakdownPath).href);
+const costRows = costBreakdown.buildCostBreakdownRows({
+  costLand: 250,
+  costBuild: 0,
+  costProfessionalFees: -20,
+  costBulkContributions: 1_500,
+  costTransferDuty: 50,
+  costTotal: 1_000,
+});
+assert.deepEqual(
+  costRows.map((row: { label: string; formattedValue: string; percentage: number }) => ({
+    label: row.label,
+    formattedValue: row.formattedValue,
+    percentage: row.percentage,
+  })),
+  [
+    { label: "Land", formattedValue: "R 250.00", percentage: 25 },
+    { label: "Build", formattedValue: "R 0.00", percentage: 0 },
+    { label: "Professional fees", formattedValue: "R -20.00", percentage: 0 },
+    { label: "Bulk contributions", formattedValue: "R 1 500.00", percentage: 100 },
+    { label: "Transfer duty", formattedValue: "R 50.00", percentage: 5 },
+  ],
+  "Cost rows must preserve exact money while clamping zero, negative, and over-total widths",
+);
+assert.deepEqual(
+  costBreakdown.buildCostBreakdownRows({
+    costLand: 1,
+    costBuild: 2,
+    costProfessionalFees: 3,
+    costBulkContributions: 4,
+    costTransferDuty: 5,
+    costTotal: 0,
+  }).map((row: { percentage: number }) => row.percentage),
+  [0, 0, 0, 0, 0],
+  "A non-positive trusted total must produce zero-width bars",
+);
+const costBreakdownSource = source("apps/web/app/evaluate/result/_components/CostBreakdownBars.tsx");
+for (const contract of [
+  /role=["']progressbar["']/,
+  /aria-valuemin=\{0\}/,
+  /aria-valuemax=\{100\}/,
+  /aria-valuenow=\{row\.percentage\}/,
+  /aria-label=\{`\$\{row\.label\}: \$\{row\.formattedValue\}`\}/,
+  /formatZar/,
+  /cost-bar-fill/,
+]) {
+  assert.match(costBreakdownSource, contract, `CostBreakdownBars is missing ${contract}`);
+}
+
+const resultPage = source("apps/web/app/evaluate/result/page.tsx");
+for (const contract of [
+  /Analysis subject/,
+  /Total investment/,
+  /Gross annual income/,
+  /Yield @ 100%/,
+  /Yield @ 85% occ\./,
+  /<CostBreakdownBars/,
+  /Income projection/,
+  /Decision engine/,
+  /actualUnits/,
+  /targetUnits/,
+  /viabilityNotes/,
+  /decisionStatus/,
+  /zoningEvidenceAvailable/,
+  /Keep this analysis/,
+  /Create project/,
+  /New analysis/,
+]) {
+  assert.match(resultPage, contract, `Cost Oracle result is missing ${contract}`);
+}
+assert.match(resultPage, /body:\s*JSON\.stringify\(formValues\)/, "Save must retain the canonical feasibility input payload");
+assert.match(resultPage, /trustedTotal\s*=\s*result\.costTotal[\s\S]*listingId:\s*saved\.listingId[\s\S]*reportId:\s*saved\.reportId[\s\S]*phase1TargetZar:\s*trustedTotal/, "Create-project must retain saved IDs and trusted total");
+assert.doesNotMatch(resultPage, /Export report/, "Cost Oracle must not expose a fake report export action");
+
 const globals = source("apps/web/app/globals.css");
 for (const className of ["scout-layout", "scout-lead-card", "listing-marker", "floating-lead-chip", "map-legend", "map-fallback", "parcel-detail-layout", "parcel-fact-grid", "massing-shell", "massing-fallback"]) {
   assert.match(globals, new RegExp(`\\.${className}\\b`), `Missing themed ${className} styles`);
@@ -252,6 +328,13 @@ assert.match(globals, /@media\s*\(max-width:\s*860px\)[\s\S]*\.scout-layout/, "S
 assert.match(globals, /@media\s*\(max-width:\s*360px\)[\s\S]*\.scout-lead-card/, "Scout cards must contain at 320px");
 assert.match(globals, /@media\s*\(max-width:\s*860px\)[\s\S]*\.parcel-detail-layout/, "Parcel detail must stack at 860px");
 assert.match(globals, /@media\s*\(max-width:\s*360px\)[\s\S]*\.parcel-fact-grid/, "Parcel facts must contain at 320px");
+for (const className of ["cost-oracle-head", "cost-analysis-subject", "cost-kpi-grid", "cost-oracle-layout", "cost-breakdown-row", "cost-bar-track", "cost-bar-fill", "cost-decision-card"]) {
+  assert.match(globals, new RegExp(`\\.${className}\\b`), `Missing themed ${className} styles`);
+}
+assert.match(globals, /\.cost-bar-fill\s*\{[^}]*transition:\s*width\s+200ms\s+var\(--motion-easing\)/, "Cost bars must use the prescribed width motion");
+assert.match(globals, /@media\s*\(max-width:\s*860px\)[\s\S]*\.cost-oracle-layout/, "Cost Oracle must stack at 860px");
+assert.match(globals, /@media\s*\(max-width:\s*360px\)[\s\S]*\.cost-analysis-subject/, "Cost Oracle must contain at 320px");
+assert.match(globals, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*transition:\s*none\s*!important/, "Reduced motion must disable cost-bar transitions");
 
 console.log("Signature property views contract smoke passed");
 }

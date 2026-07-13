@@ -25,7 +25,7 @@
 - [x] Make capital governance atomic, user-ID based, and impossible to bypass through settings/RLS.
 - [x] Recompute saved feasibility decisions server-side and add spatial/envelope evidence plus luxury units.
 - [ ] Finish shell, brand assets, dark mode, 860px responsiveness, typography, money formatting, and motion fidelity.
-- [ ] Finish Scout/Parcel/Cost Oracle signature views: map overlays, legend, fact chips, massing, and cost bars.
+- [x] Finish Scout/Parcel/Cost Oracle signature views: map overlays, legend, fact chips, massing, and cost bars.
 - [ ] Finish Settings/Tariffs controls and role-aware project/compliance mutation surfaces.
 - [ ] Implement canonical municipal PDF templates/package storage and authenticated worker boundary.
 - [ ] Complete source scrapers/job execution, GIS ingestion scripts, and clean migration/RLS verification.
