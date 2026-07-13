@@ -33,7 +33,31 @@ export default function ZoningPage({ params }: { params: Promise<{ id: string }>
     const response = await fetch("/api/documents", { method: "POST", headers: actorHeaders(), body: JSON.stringify({ listingId: Number(id), municipality: listing?.municipality, forms: docs, prefilledData: { address: listing?.address, parcelId: listing?.parcelId, zoneCode: listing?.zoneCode, dolomiteRisk: listing?.dolomiteRisk, municipality: listing?.municipality } }) });
     const body = await response.json();
     if (!response.ok) { setMessage(body.error ?? "Could not generate documents"); return; }
-    setDocuments(body); setMessage("Compliance documents generated and saved as ready.");
+    try {
+      const generated = await Promise.all((body as Document[]).map(generateDocument));
+      setDocuments(generated);
+      setMessage("Compliance documents generated and saved as ready.");
+    } catch (error) {
+      setDocuments(body);
+      setMessage(error instanceof Error ? error.message : "Could not generate document PDFs");
+    }
+  }
+
+  async function generateDocument(document: Document) {
+    const response = await fetch(`/api/documents/${document.id}/download`, { method: "POST", headers: actorHeaders() });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? `Could not generate ${document.docType.replaceAll("_", " ")}`);
+    return body as Document;
+  }
+
+  async function generateOne(document: Document) {
+    try {
+      const generated = await generateDocument(document);
+      setDocuments((items) => items.map((item) => item.id === document.id ? generated : item));
+      setMessage(`${document.docType.replaceAll("_", " ")} generated.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not generate document PDF");
+    }
   }
 
   async function updateStatus(document: Document, status: string) {
@@ -53,7 +77,7 @@ export default function ZoningPage({ params }: { params: Promise<{ id: string }>
         <div className="compliance-timeline">{steps.map((step, index) => {
           const document = documents.find((item) => item.docType === docs[index]);
           const complete = document && ["ready", "submitted", "approved"].includes(document.status);
-          return <div className="compliance-step" key={step}><span className={complete ? "step-dot complete" : "step-dot"}>{complete ? "✓" : index + 1}</span><div style={{ minWidth: 0, flex: 1 }}><strong>{step}</strong><small>{document ? `Status: ${document.status}` : "Not started"}</small></div>{document ? <div className="split">{canEdit ? <select className="field" aria-label={`Status for ${document.docType}`} style={{ minHeight: 30, width: 118, padding: "0 6px", fontSize: 10 }} value={document.status} onChange={(event) => updateStatus(document, event.target.value)}>{statuses.map((status) => <option key={status}>{status}</option>)}</select> : <span className="tag">Read-only</span>}<a className="button button-quiet" style={{ minHeight: 30, padding: "0 9px" }} href={`/api/documents/${document.id}/download`}>PDF</a></div> : <span className="tag">Pending</span>}</div>;
+          return <div className="compliance-step" key={step}><span className={complete ? "step-dot complete" : "step-dot"}>{complete ? "✓" : index + 1}</span><div style={{ minWidth: 0, flex: 1 }}><strong>{step}</strong><small>{document ? `Status: ${document.status}` : "Not started"}</small></div>{document ? <div className="split">{canEdit ? <select className="field" aria-label={`Status for ${document.docType}`} style={{ minHeight: 30, width: 118, padding: "0 6px", fontSize: 10 }} value={document.status} onChange={(event) => updateStatus(document, event.target.value)}>{statuses.map((status) => <option key={status}>{status}</option>)}</select> : <span className="tag">Read-only</span>}{document.pdfUrl ? <a className="button button-quiet" style={{ minHeight: 30, padding: "0 9px" }} href={`/api/documents/${document.id}/download`}>PDF</a> : canEdit ? <button className="button button-quiet" style={{ minHeight: 30, padding: "0 9px" }} onClick={() => generateOne(document)}>Generate PDF</button> : null}</div> : <span className="tag">Pending</span>}</div>;
         })}</div>
       </section>
       <section className="stack">

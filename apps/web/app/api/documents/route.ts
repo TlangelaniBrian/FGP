@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     body.reportId ? db.select({ id: feasibilityReports.id }).from(feasibilityReports).where(and(eq(feasibilityReports.id, body.reportId), eq(feasibilityReports.userId, guard.actor!.userId))).limit(1) : Promise.resolve([]),
   ]);
   if ((body.listingId && !ownedListing[0]) || (body.reportId && !ownedReport[0])) return NextResponse.json({ error: "listing or feasibility report not found" }, { status: 404 });
-  const rows = await db.insert(complianceDocuments).values(body.forms.map((docType) => ({ userId: guard.actor!.userId, reportId: body.reportId, listingId: body.listingId, municipality: body.municipality, docType, status: "ready", prefilledData: body.prefilledData ?? {} }))).returning();
-  await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "documents_generated", title: "Compliance package generated", detail: `${rows.length} documents`, entityType: "listing", entityId: body.listingId ?? body.reportId });
+  const rows = await db.insert(complianceDocuments).values(body.forms.map((docType) => ({ userId: guard.actor!.userId, reportId: body.reportId, listingId: body.listingId, municipality: body.municipality, docType, status: "draft", prefilledData: body.prefilledData ?? {} }))).returning();
+  await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "documents_created", title: "Compliance package created", detail: `${rows.length} draft documents`, entityType: "listing", entityId: body.listingId ?? body.reportId });
   return NextResponse.json(rows, { status: 201 });
 }

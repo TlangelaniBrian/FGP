@@ -31,6 +31,15 @@
 - [ ] Complete source scrapers/job execution, GIS ingestion scripts, and clean migration/RLS verification.
 - [ ] Add browser E2E/visual regression coverage and verify the production deployment on its exact public host.
 
+## Task 1 re-review remediation (2026-07-13)
+
+- [x] Add a focused failing smoke for direct Viewer writes, read-only downloads, and member-ID governance.
+- [x] Split workspace RLS into active-member reads and non-Viewer writes.
+- [x] Make document GET read-only and capability-guard document generation behind POST.
+- [x] Key capital approvals by stable `team_members.id`, including active unbound members.
+- [x] Apply the migration locally and run the focused and repository verification checks.
+- [x] Append RED/GREEN evidence, self-review the diff, and commit only task files.
+
 ## Review
 
 Implemented the shared Capitec-style shell, route-aware navigation, visual
@@ -41,6 +50,11 @@ documents, project edits, and restyled Scout/Evaluate/Projects surfaces.
 The second pass added backend contracts and migration 0006 for capital
 contributions/governance, portal settings, compliance documents, project
 updates, and handler-level role checks.
+
+The Task 1 re-review remediation separates active-member reads from non-Viewer
+writes in migration 0016, makes document downloads read-only with generation
+behind a guarded POST, and keys all governance approvals to stable team member
+IDs so active email-matched members remain part of unanimity.
 
 Verification: `supabase migration up --local`, live capital API read/write,
 Viewer 403 checks for capital/settings/tariffs, `pnpm --filter web typecheck`,

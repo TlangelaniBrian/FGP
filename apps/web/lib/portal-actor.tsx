@@ -5,6 +5,7 @@ import type { Role } from "./portal-state";
 
 export type PortalActor = {
   userId: string;
+  memberId: number;
   email: string;
   name: string;
   initials: string;

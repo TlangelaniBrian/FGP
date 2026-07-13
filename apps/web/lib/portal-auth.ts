@@ -33,6 +33,7 @@ export async function getAuthenticatedActor(request?: Request): Promise<PortalAc
   if (!storedMember) return null;
   return {
     userId: data.user.id,
+    memberId: storedMember.id,
     email,
     name: storedMember.name,
     initials: initialsFor(storedMember.name),

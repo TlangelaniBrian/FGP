@@ -8,8 +8,8 @@ import { getAuthenticatedActor, requireSessionCapability } from "@/lib/portal-au
 import { recordActivity } from "@/lib/activity";
 
 async function getGoverningMembers() {
-  const rows = await db.select({ userId: teamMembers.userId, name: teamMembers.name, role: teamMembers.role, status: teamMembers.status }).from(teamMembers);
-  return rows.filter((member): member is typeof member & { userId: string } => member.status === "active" && member.role !== "Viewer" && Boolean(member.userId));
+  const rows = await db.select({ memberId: teamMembers.id, name: teamMembers.name, role: teamMembers.role, status: teamMembers.status }).from(teamMembers);
+  return rows.filter((member) => member.status === "active" && member.role !== "Viewer");
 }
 
 export async function GET(req: NextRequest) {
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     const guard = await requireSessionCapability("proposal", req);
     if (guard.response) return guard.response;
     if (!Number.isFinite(body.newAmount) || (body.newAmount ?? 0) <= 0) return NextResponse.json({ error: "newAmount must be greater than zero" }, { status: 422 });
-    const [row] = await db.insert(capitalGoalProposals).values({ proposedBy: guard.actor!.name, proposedByRole: guard.actor!.role, newAmount: String(body.newAmount), approvals: [guard.actor!.userId] }).returning();
+    const [row] = await db.insert(capitalGoalProposals).values({ proposedBy: guard.actor!.name, proposedByRole: guard.actor!.role, newAmount: String(body.newAmount), approvals: [guard.actor!.memberId] }).returning();
     await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "goal_proposal", title: "Capital goal proposal created", detail: `R ${Number(body.newAmount).toLocaleString("en-ZA")}`, entityType: "capital_goal_proposal", entityId: row.id });
     return NextResponse.json(row, { status: 201 });
   }
@@ -54,12 +54,12 @@ export async function POST(req: NextRequest) {
     if (!body.proposalId) return NextResponse.json({ error: "proposalId is required" }, { status: 422 });
     const [proposal] = await db.select().from(capitalGoalProposals).where(and(eq(capitalGoalProposals.id, body.proposalId), eq(capitalGoalProposals.status, "pending")));
     if (!proposal) return NextResponse.json({ error: "pending goal proposal not found" }, { status: 404 });
-    const approvals = Array.isArray(proposal.approvals) ? [...proposal.approvals as string[]] : [];
-    if (approvals.includes(guard.actor!.userId)) return NextResponse.json({ error: "actor has already co-signed" }, { status: 409 });
-    approvals.push(guard.actor!.userId);
+    const approvals = Array.isArray(proposal.approvals) ? [...proposal.approvals as number[]] : [];
+    if (approvals.includes(guard.actor!.memberId)) return NextResponse.json({ error: "actor has already co-signed" }, { status: 409 });
+    approvals.push(guard.actor!.memberId);
     const governingMembers = await getGoverningMembers();
-    const requiredMembers = governingMembers.length ? governingMembers : [{ userId: guard.actor!.userId, name: guard.actor!.name, role: guard.actor!.role, status: "active" }];
-    const approved = requiredMembers.every((member) => approvals.includes(member.userId));
+    const requiredMembers = governingMembers.length ? governingMembers : [{ memberId: guard.actor!.memberId, name: guard.actor!.name, role: guard.actor!.role, status: "active" }];
+    const approved = requiredMembers.every((member) => approvals.includes(member.memberId));
     await db.update(capitalGoalProposals).set({ approvals, status: approved ? "approved" : "pending" }).where(eq(capitalGoalProposals.id, proposal.id));
     if (approved) await db.insert(portalSettings).values({ key: "capital_goal", value: Number(proposal.newAmount), updatedBy: guard.actor!.name }).onConflictDoUpdate({ target: portalSettings.key, set: { value: Number(proposal.newAmount), updatedBy: guard.actor!.name, updatedAt: new Date() } });
     await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "goal_cosign", title: approved ? "Capital goal approved" : "Capital goal co-signed", detail: `Proposal #${proposal.id}`, entityType: "capital_goal_proposal", entityId: proposal.id });
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     const guard = await requireSessionCapability("proposal", req);
     if (guard.response) return guard.response;
     if (!body.contributionId || !body.correctionAction) return NextResponse.json({ error: "contributionId and correctionAction are required" }, { status: 422 });
-    const [row] = await db.insert(capitalCorrectionProposals).values({ contributionId: body.contributionId, proposedBy: guard.actor!.name, proposedByRole: guard.actor!.role, action: body.correctionAction, proposedAmount: body.amount ? String(body.amount) : null, proposedNote: body.proposedNote ?? null, approvals: [guard.actor!.userId] }).returning();
+    const [row] = await db.insert(capitalCorrectionProposals).values({ contributionId: body.contributionId, proposedBy: guard.actor!.name, proposedByRole: guard.actor!.role, action: body.correctionAction, proposedAmount: body.amount ? String(body.amount) : null, proposedNote: body.proposedNote ?? null, approvals: [guard.actor!.memberId] }).returning();
     await recordActivity({ actorUserId: guard.actor!.userId, actorName: guard.actor!.name, eventType: "correction_proposal", title: "Contribution correction proposed", detail: `${body.correctionAction} · contribution #${body.contributionId}`, entityType: "capital_correction", entityId: row.id });
     return NextResponse.json(row, { status: 201 });
   }
@@ -79,9 +79,9 @@ export async function POST(req: NextRequest) {
     if (!body.proposalId) return NextResponse.json({ error: "proposalId is required" }, { status: 422 });
     const [proposal] = await db.select().from(capitalCorrectionProposals).where(and(eq(capitalCorrectionProposals.id, body.proposalId), eq(capitalCorrectionProposals.status, "pending")));
     if (!proposal) return NextResponse.json({ error: "pending correction proposal not found" }, { status: 404 });
-    const approvals = Array.isArray(proposal.approvals) ? [...proposal.approvals as string[]] : [];
-    if (approvals.includes(guard.actor!.userId)) return NextResponse.json({ error: "actor has already co-signed" }, { status: 409 });
-    approvals.push(guard.actor!.userId);
+    const approvals = Array.isArray(proposal.approvals) ? [...proposal.approvals as number[]] : [];
+    if (approvals.includes(guard.actor!.memberId)) return NextResponse.json({ error: "actor has already co-signed" }, { status: 409 });
+    approvals.push(guard.actor!.memberId);
     const approved = approvals.length >= 2;
     if (approved) {
       if (proposal.action === "remove") await db.update(capitalContributions).set({ status: "removed" }).where(eq(capitalContributions.id, proposal.contributionId));

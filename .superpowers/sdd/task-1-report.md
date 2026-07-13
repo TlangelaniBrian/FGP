@@ -138,3 +138,61 @@ expected: 'analyzed'
 ```
 
 No workflow production behavior was changed to mask that failure.
+
+## Re-review finding remediation (2026-07-13)
+
+### RED
+
+The focused smoke was extended before production changes and its dependent
+workspace rows were kept intact until every read/update/insert check completed.
+It then reproduced all three review findings and exited 1:
+
+```text
+RED read-only document download contract: document GET still generates or persists an artifact
+RED Viewer direct workspace writes: Viewer directly updated: projects, listings, feasibility_reports, compliance_documents, scrape_jobs, project_budget_items, project_contacts, project_decisions, project_checkins, milestones
+RED stable goal approval IDs: goal proposal approvals must use member IDs
+RED stable correction approval IDs: correction approvals must use member IDs
+AssertionError: 4 security regression checks failed
+```
+
+### Fixes
+
+- Added migration `0016_viewer_write_boundary_and_member_approvals.sql`. Owned
+  workspace rows remain readable to every active member, while insert, update,
+  and delete now require the non-Viewer `record`/`project` role set. The same
+  split applies to all five project child tables.
+- Applied migration 0016 directly through the local Postgres container; it
+  completed successfully without invoking the hanging Supabase
+  CLI. Pending UUID-based approvals are normalized to stable member IDs and
+  unknown legacy values are discarded.
+- Added `memberId` to the authenticated portal actor. Goal and correction
+  approvals now persist `team_members.id`; goal unanimity includes every active
+  non-Viewer row, including email-matched members with a null `user_id`.
+- Made `GET /api/documents/:id/download` read-only. It signs an existing stored
+  object path and redirects without generating, uploading, or updating data.
+  Capability-guarded POST now performs generation and persistence, and the UI
+  only exposes Viewer downloads when an artifact exists.
+- New compliance rows remain `draft` until their PDF generation POST succeeds;
+  durable object paths are stored instead of expiring signed URLs.
+
+### GREEN
+
+After applying migration 0016, the focused smoke exited 0:
+
+```text
+Authenticated role smoke passed: RLS, page boundary, Viewer controls, stable approvals, and cleanup asserted.
+```
+
+The smoke now covers direct Viewer read/update/delete/insert attempts against
+projects, listings, feasibility reports, compliance documents, scrape jobs,
+budgets, contacts, decisions, check-ins, and milestones. It also covers
+duplicate display names and an active Analyst authenticated by email while
+`team_members.user_id` is null.
+
+TypeScript, ESLint, and whitespace verification each exited 0. The broader API
+workflow was timeboxed and reproduced its known unrelated failure at
+`scripts/api-workflow-smoke.mjs:102` (`actual: 'new'`, `expected: 'analyzed'`).
+With the running app's database and Supabase environment supplied, the
+production build compiled and completed TypeScript/page-data collection, then
+reproduced the pre-existing `/login` prerender failure because `useSearchParams`
+is not wrapped in Suspense. No unrelated login code was changed.

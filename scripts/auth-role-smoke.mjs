@@ -23,6 +23,7 @@ const identities = [
   { kind: "viewer", email: `fgp-auth-viewer-${runId}@example.com`, role: "Viewer", status: "active" },
   { kind: "owner", email: `fgp-auth-owner-${runId}@example.com`, name: "Duplicate Approval Member", role: "Owner", status: "active" },
   { kind: "analyst", email: `fgp-auth-analyst-${runId}@example.com`, name: "Duplicate Approval Member", role: "Analyst", status: "active" },
+  { kind: "unbound-analyst", email: `fgp-auth-unbound-${runId}@example.com`, name: "Duplicate Approval Member", role: "Analyst", status: "active", bindUserId: false },
 ];
 
 const createdUsers = [];
@@ -30,6 +31,7 @@ const createdMembers = [];
 const createdContributions = [];
 const createdGoalProposals = [];
 const createdCorrectionProposals = [];
+const createdWorkspaceRecords = [];
 const regressionFailures = [];
 
 async function checkRegression(name, test) {
@@ -68,9 +70,10 @@ async function api(path, token, options = {}) {
   return { response, payload: await response.json().catch(() => null) };
 }
 
-async function direct(path, token) {
+async function direct(path, token, options = {}) {
   const response = await fetch(`${supabaseUrl}${path}`, {
-    headers: { apikey: anonKey, Authorization: `Bearer ${token}` },
+    ...options,
+    headers: { apikey: anonKey, Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(options.headers ?? {}) },
   });
   return { response, payload: await response.json().catch(() => null) };
 }
@@ -105,7 +108,7 @@ async function createIdentity(identity) {
       method: "POST",
       headers: { Prefer: "return=representation" },
       body: JSON.stringify({
-        user_id: user.id,
+        user_id: identity.bindUserId === false ? null : user.id,
         email: identity.email,
         name: identity.name ?? `Auth Role ${identity.kind}`,
         role: identity.role,
@@ -113,6 +116,7 @@ async function createIdentity(identity) {
       }),
     });
     createdMembers.push(member.id);
+    identity.memberId = member.id;
   }
 
   const authResponse = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
@@ -123,13 +127,45 @@ async function createIdentity(identity) {
   const authPayload = await authResponse.json();
   assert.equal(authResponse.ok, true, `Sign-in failed for ${identity.kind}: ${JSON.stringify(authPayload)}`);
   assert(authPayload.access_token, `No access token returned for ${identity.kind}`);
-  return { kind: identity.kind, userId: user.id, token: authPayload.access_token, refreshToken: authPayload.refresh_token };
+  return { kind: identity.kind, userId: user.id, memberId: identity.memberId ?? null, token: authPayload.access_token, refreshToken: authPayload.refresh_token };
+}
+
+async function createWorkspaceRecord(table, values) {
+  const [row] = await admin(`/rest/v1/${table}`, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(values) });
+  createdWorkspaceRecords.unshift({ table, id: row.id });
+  return row;
+}
+
+async function seedViewerWorkspace(userId) {
+  const project = await createWorkspaceRecord("projects", { user_id: userId, name: `Viewer project ${runId}`, notes: "original" });
+  const listing = await createWorkspaceRecord("listings", { user_id: userId, source: "manual", address: `Viewer listing ${runId}`, description: "original" });
+  const report = await createWorkspaceRecord("feasibility_reports", { user_id: userId, listing_id: listing.id, unit_type: "1bed", target_units: 1, viability_notes: "original" });
+  const document = await createWorkspaceRecord("compliance_documents", { user_id: userId, listing_id: listing.id, report_id: report.id, doc_type: "zoning_certificate", municipality: "original", status: "ready" });
+  const scrapeJob = await createWorkspaceRecord("scrape_jobs", { user_id: userId, source: "property24", status: "queued", error_message: "original" });
+  const budget = await createWorkspaceRecord("project_budget_items", { project_id: project.id, category: "general", item: `Viewer budget ${runId}`, notes: "original" });
+  const contact = await createWorkspaceRecord("project_contacts", { project_id: project.id, role: "Architect", name: "original" });
+  const decision = await createWorkspaceRecord("project_decisions", { project_id: project.id, decided_at: "2026-07-13", decision: `Viewer decision ${runId}`, rationale: "original" });
+  const checkin = await createWorkspaceRecord("project_checkins", { project_id: project.id, week_of: "2026-07-13", open_issues: "original" });
+  const milestone = await createWorkspaceRecord("milestones", { project_id: project.id, target_date: "2026-08", milestone: `Viewer milestone ${runId}`, owner: "original" });
+  return [
+    { table: "projects", row: project, field: "notes", insert: { user_id: userId, name: `Viewer insert project ${runId}` } },
+    { table: "listings", row: listing, field: "description", insert: { user_id: userId, source: "manual", address: `Viewer insert listing ${runId}` } },
+    { table: "feasibility_reports", row: report, field: "viability_notes", insert: { user_id: userId, listing_id: listing.id, unit_type: "1bed", target_units: 2 } },
+    { table: "compliance_documents", row: document, field: "municipality", insert: { user_id: userId, listing_id: listing.id, doc_type: "motivation_letter" } },
+    { table: "scrape_jobs", row: scrapeJob, field: "error_message", insert: { user_id: userId, source: "property24" } },
+    { table: "project_budget_items", row: budget, field: "notes", insert: { project_id: project.id, category: "general", item: `Viewer insert budget ${runId}` } },
+    { table: "project_contacts", row: contact, field: "name", insert: { project_id: project.id, role: "Engineer", name: "viewer insert" } },
+    { table: "project_decisions", row: decision, field: "rationale", insert: { project_id: project.id, decided_at: "2026-07-14", decision: `Viewer insert decision ${runId}` } },
+    { table: "project_checkins", row: checkin, field: "open_issues", insert: { project_id: project.id, week_of: "2026-07-20" } },
+    { table: "milestones", row: milestone, field: "owner", insert: { project_id: project.id, target_date: "2026-09", milestone: `Viewer insert milestone ${runId}` } },
+  ];
 }
 
 async function cleanup() {
   for (const id of createdCorrectionProposals) await admin(`/rest/v1/capital_correction_proposals?id=eq.${id}`, { method: "DELETE" });
   for (const id of createdGoalProposals) await admin(`/rest/v1/capital_goal_proposals?id=eq.${id}`, { method: "DELETE" });
   for (const id of createdContributions) await admin(`/rest/v1/capital_contributions?id=eq.${id}`, { method: "DELETE" });
+  for (const { table, id } of createdWorkspaceRecords) await admin(`/rest/v1/${table}?id=eq.${id}`, { method: "DELETE" });
 
   for (const userId of createdUsers) {
     await admin(`/rest/v1/activity_events?actor_user_id=eq.${userId}`, { method: "DELETE" });
@@ -168,6 +204,17 @@ try {
       assert.match(source, /usePortalActor/, `${path} does not resolve the authenticated actor`);
       assert.match(source, /can\(actor\?\.role \?\? "Viewer"/, `${path} does not gate Viewer mutation controls`);
     }
+  });
+
+  await checkRegression("read-only document download contract", async () => {
+    const route = await readFile(new URL("../apps/web/app/api/documents/[id]/download/route.ts", import.meta.url), "utf8");
+    const getBody = route.split("export async function POST")[0];
+    assert.doesNotMatch(getBody, /forms\/generate|\.upload\(|db\.update/, "document GET still generates or persists an artifact");
+    assert.match(route, /export async function POST/, "document generation POST is missing");
+    assert.match(route, /requireSessionCapability\("project"/, "document generation POST lacks the project capability guard");
+    const zoning = await readFile(new URL("../apps/web/app/scout/[id]/zoning/page.tsx", import.meta.url), "utf8");
+    assert.match(zoning, /document\.pdfUrl/, "zoning UI does not restrict downloads to stored artifacts");
+    assert.match(zoning, /method: "POST"/, "zoning UI has no explicit artifact generation action");
   });
 
   let result = await api("/api/session", sessions["non-member"].token);
@@ -215,6 +262,36 @@ try {
     assert.deepEqual(viewerRead.payload, [{ key: settingsKey }]);
   });
 
+  await checkRegression("Viewer direct workspace writes", async () => {
+    const resources = await seedViewerWorkspace(sessions.viewer.userId);
+    const mutated = [];
+    const deleted = [];
+    const inserted = [];
+    for (const resource of resources) {
+      const read = await direct(`/rest/v1/${resource.table}?id=eq.${resource.row.id}&select=id`, sessions.viewer.token);
+      assert.equal(read.response.status, 200, `${resource.table} Viewer read failed`);
+      assert.deepEqual(read.payload, [{ id: resource.row.id }], `${resource.table} Viewer read was denied`);
+
+      await direct(`/rest/v1/${resource.table}?id=eq.${resource.row.id}`, sessions.viewer.token, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ [resource.field]: "viewer-mutated" }) });
+      const afterPatch = await admin(`/rest/v1/${resource.table}?id=eq.${resource.row.id}&select=${resource.field}`);
+      if (afterPatch[0]?.[resource.field] === "viewer-mutated") mutated.push(resource.table);
+
+      const insert = await direct(`/rest/v1/${resource.table}`, sessions.viewer.token, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(resource.insert) });
+      if (insert.response.ok && insert.payload?.[0]?.id) {
+        inserted.push(resource.table);
+        createdWorkspaceRecords.unshift({ table: resource.table, id: insert.payload[0].id });
+      }
+    }
+    for (const resource of [...resources].reverse()) {
+      await direct(`/rest/v1/${resource.table}?id=eq.${resource.row.id}`, sessions.viewer.token, { method: "DELETE", headers: { Prefer: "return=representation" } });
+      const afterDelete = await admin(`/rest/v1/${resource.table}?id=eq.${resource.row.id}&select=id`);
+      if (afterDelete.length === 0) deleted.push(resource.table);
+    }
+    assert.deepEqual(mutated, [], `Viewer directly updated: ${mutated.join(", ")}`);
+    assert.deepEqual(deleted, [], `Viewer directly deleted: ${deleted.join(", ")}`);
+    assert.deepEqual(inserted, [], `Viewer directly inserted: ${inserted.join(", ")}`);
+  });
+
   await checkRegression("protected page active-member boundary", async () => {
     for (const kind of ["non-member", "invited", "suspended", "removed"]) {
       const cookie = await sessionCookie(sessions[kind]);
@@ -228,10 +305,13 @@ try {
     result = await api("/api/capital", sessions.owner.token, { method: "POST", body: JSON.stringify({ action: "goal", newAmount: 765432 }) });
     assert.equal(result.response.status, 201, JSON.stringify(result.payload));
     createdGoalProposals.push(result.payload.id);
-    assert.deepEqual(result.payload.approvals, [sessions.owner.userId], "goal proposal approvals must use user IDs");
+    assert.deepEqual(result.payload.approvals, [sessions.owner.memberId], "goal proposal approvals must use member IDs");
     result = await api("/api/capital", sessions.analyst.token, { method: "POST", body: JSON.stringify({ action: "approve-goal", proposalId: createdGoalProposals[0] }) });
     assert.equal(result.response.status, 200, JSON.stringify(result.payload));
-    assert.deepEqual(new Set(result.payload.approvals), new Set([sessions.owner.userId, sessions.analyst.userId]));
+    assert.deepEqual(new Set(result.payload.approvals), new Set([sessions.owner.memberId, sessions.analyst.memberId]));
+    result = await api("/api/capital", sessions["unbound-analyst"].token, { method: "POST", body: JSON.stringify({ action: "approve-goal", proposalId: createdGoalProposals[0] }) });
+    assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+    assert.equal(result.payload.approvals.includes(sessions["unbound-analyst"].memberId), true, "active member without user_id was omitted from approvals");
   });
 
   await checkRegression("stable correction approval IDs", async () => {
@@ -241,10 +321,10 @@ try {
     result = await api("/api/capital", sessions.owner.token, { method: "POST", body: JSON.stringify({ action: "correction", contributionId: createdContributions[0], correctionAction: "edit", amount: 124, proposedNote: `Auth role correction ${runId}` }) });
     assert.equal(result.response.status, 201, JSON.stringify(result.payload));
     createdCorrectionProposals.push(result.payload.id);
-    assert.deepEqual(result.payload.approvals, [sessions.owner.userId], "correction approvals must use user IDs");
+    assert.deepEqual(result.payload.approvals, [sessions.owner.memberId], "correction approvals must use member IDs");
     result = await api("/api/capital", sessions.analyst.token, { method: "POST", body: JSON.stringify({ action: "approve-correction", proposalId: createdCorrectionProposals[0] }) });
     assert.equal(result.response.status, 200, JSON.stringify(result.payload));
-    assert.deepEqual(new Set(result.payload.approvals), new Set([sessions.owner.userId, sessions.analyst.userId]));
+    assert.deepEqual(new Set(result.payload.approvals), new Set([sessions.owner.memberId, sessions.analyst.memberId]));
   });
 
   assert.equal(regressionFailures.length, 0, `${regressionFailures.length} security regression checks failed`);

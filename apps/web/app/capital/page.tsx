@@ -15,20 +15,20 @@ type Contribution = {
 type GoalProposal = {
   id: number;
   newAmount: string;
-  approvals: string[];
+  approvals: number[];
   proposedBy: string;
 };
 type Correction = {
   id: number;
   contributionId: number;
   action: string;
-  approvals: string[];
+  approvals: number[];
   proposedBy: string;
   proposedAmount: string | null;
 };
 type Governance = {
-  requiredMembers: Array<{ userId: string; name: string; role: string; status: string }>;
-  members: Array<{ userId: string; name: string; role: string; status: string }>;
+  requiredMembers: Array<{ memberId: number; name: string; role: string; status: string }>;
+  members: Array<{ memberId: number; name: string; role: string; status: string }>;
 };
 
 export default function CapitalPage() {
@@ -117,7 +117,7 @@ export default function CapitalPage() {
             id: payload.goalProposal.id,
             newAmount: payload.goalProposal.newAmount,
             approvals: Array.isArray(payload.goalProposal.approvals)
-              ? (payload.goalProposal.approvals as string[])
+              ? (payload.goalProposal.approvals as number[])
               : [],
             proposedBy: payload.goalProposal.proposedBy,
           });
@@ -127,7 +127,7 @@ export default function CapitalPage() {
             contributionId: item.contributionId,
             action: item.action,
             approvals: Array.isArray(item.approvals)
-              ? (item.approvals as string[])
+              ? (item.approvals as number[])
               : [],
             proposedBy: item.proposedBy,
             proposedAmount: item.proposedAmount,
@@ -429,7 +429,7 @@ export default function CapitalPage() {
                     </small>
                   </span>
                   {can(actor?.role ?? "Viewer", "cosign") &&
-                    !proposal.approvals.includes(actor?.userId ?? "") && (
+                    !proposal.approvals.includes(actor?.memberId ?? -1) && (
                     <button
                       className="button button-secondary"
                       onClick={() => approveCorrection(proposal)}
@@ -501,18 +501,18 @@ export default function CapitalPage() {
                   {governance.requiredMembers.map((member) => (
                     <div
                       className="split"
-                      key={member.userId}
+                      key={member.memberId}
                       style={{ fontSize: 11, padding: "3px 0" }}
                     >
                       <span>{member.name}</span>
                       <span
                         className={
-                          goalProposal.approvals.includes(member.userId)
+                          goalProposal.approvals.includes(member.memberId)
                             ? "tag tag-green"
                             : "tag tag-amber"
                         }
                       >
-                        {goalProposal.approvals.includes(member.userId)
+                        {goalProposal.approvals.includes(member.memberId)
                           ? "Signed"
                           : "Pending"}
                       </span>
@@ -520,7 +520,7 @@ export default function CapitalPage() {
                   ))}
                 </div>
                 {can(actor?.role ?? "Viewer", "cosign") &&
-                  !goalProposal.approvals.includes(actor?.userId ?? "") && (
+                  !goalProposal.approvals.includes(actor?.memberId ?? -1) && (
                   <button
                     className="button button-secondary"
                     style={{ marginTop: 10 }}
@@ -578,14 +578,14 @@ export default function CapitalPage() {
                 {governance.requiredMembers.map((member) => (
                   <span
                     className={
-                      proposal.approvals.includes(member.userId)
+                      proposal.approvals.includes(member.memberId)
                         ? "tag tag-green"
                         : "tag tag-amber"
                     }
-                    key={`${proposal.id}-${member.userId}`}
+                    key={`${proposal.id}-${member.memberId}`}
                   >
                     {member.name.split(" ")[0]}:{" "}
-                    {proposal.approvals.includes(member.userId) ? "✓" : "…"}
+                    {proposal.approvals.includes(member.memberId) ? "✓" : "…"}
                   </span>
                 ))}
               </span>
