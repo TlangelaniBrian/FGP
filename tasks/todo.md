@@ -21,9 +21,9 @@
 
 - [x] Validate `pull-new-designs` in an isolated clone: install, typecheck, lint, 30 worker tests, production build, local authenticated API smoke, and workflow smoke.
 - [x] Audit every handoff screen, backend workflow, security boundary, and verification claim.
-- [ ] Fix authenticated identity and Viewer/role enforcement end to end.
-- [ ] Make capital governance atomic, user-ID based, and impossible to bypass through settings/RLS.
-- [ ] Recompute saved feasibility decisions server-side and add spatial/envelope evidence plus luxury units.
+- [x] Fix authenticated identity and Viewer/role enforcement end to end.
+- [x] Make capital governance atomic, user-ID based, and impossible to bypass through settings/RLS.
+- [x] Recompute saved feasibility decisions server-side and add spatial/envelope evidence plus luxury units.
 - [ ] Finish shell, brand assets, dark mode, 860px responsiveness, typography, money formatting, and motion fidelity.
 - [ ] Finish Scout/Parcel/Cost Oracle signature views: map overlays, legend, fact chips, massing, and cost bars.
 - [ ] Finish Settings/Tariffs controls and role-aware project/compliance mutation surfaces.
