@@ -32,22 +32,11 @@ export default function EvaluateResultPage() {
     const res = await fetch("/api/feasibility/save", {
       method: "POST",
       headers: actorHeaders(),
-      body: JSON.stringify({
-        address: result.address, municipality: result.municipality, zoneCode: result.zoneCode,
-        sizeSqm: result.sizeSqm, price: result.price, unitType: result.unitType, targetUnits: result.targetUnits,
-        viable: result.viable, score: result.score, actualUnits: result.actualUnits,
-        maxUnitsAllowed: result.maxUnitsAllowed, rezoningRequired: result.rezoningRequired,
-        maxFootprintSqm: result.maxFootprintSqm, maxBuildableSqm: result.maxBuildableSqm,
-        costLand: result.costLand, costBuild: result.costBuild, costProfessionalFees: result.costProfessionalFees,
-        costBulkContributions: result.costBulkContributions, costTransferDuty: result.costTransferDuty,
-        costTotal: result.costTotal, rentPerUnitMonthly: result.rentPerUnitMonthly,
-        grossMonthlyIncome: result.grossMonthlyIncome, grossAnnualIncome: result.grossAnnualIncome,
-        yieldGrossPct: result.yieldGrossPct, yieldAt85OccPct: result.yieldAt85OccPct,
-        viabilityNotes: result.viabilityNotes, dolomiteRisk: result.dolomiteRisk,
-      }),
+      body: JSON.stringify(formValues),
     });
     const data = await res.json();
-    setSaved(data);
+    if (res.ok) setSaved(data);
+    else setProjectError(typeof data?.error === "string" ? data.error : "Could not save analysis");
     setSaving(false);
   }
 
@@ -75,7 +64,7 @@ export default function EvaluateResultPage() {
           </p>
         </div>
         <div className={`px-4 py-2 rounded-[20px] font-mono text-sm font-bold border ${result.viable ? "bg-accent-green/10 border-accent-green text-accent-green" : "bg-accent-red/10 border-accent-red text-accent-red"}`}>
-          {result.viable ? "VIABLE" : "NOT VIABLE"}
+          {result.decisionStatus === "degraded" ? "ZONING EVIDENCE NEEDED" : result.viable ? "VIABLE" : "NOT VIABLE"}
         </div>
       </div>
 
@@ -107,7 +96,7 @@ export default function EvaluateResultPage() {
           {[
             ["Land", result.costLand],
             ["Build", result.costBuild],
-            ["Professional Fees (12%)", result.costProfessionalFees],
+            ["Professional Fees", result.costProfessionalFees],
             ["Bulk Service Contributions", result.costBulkContributions],
             ["Transfer Duty", result.costTransferDuty],
           ].map(([label, val]) => (

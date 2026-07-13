@@ -47,6 +47,16 @@
 - [x] Run focused smoke, typecheck, lint, and diff verification.
 - [x] Append evidence and commit the focused fix without audit artifacts.
 
+## Task 3 feasibility decision integrity (2026-07-13)
+
+- [x] Capture worker RED evidence for luxury, capacity, nullable density, and missing zoning evidence.
+- [x] Capture authenticated integration RED evidence for forged save outputs and invalid tariff writes.
+- [x] Share one canonical Next.js analysis contract and server-owned worker calculation path across analyze/save.
+- [x] Add luxury and tariff-year support end to end without changing the visual design.
+- [x] Enforce density, FAR, footprint/storey capacity and degraded zoning outcomes.
+- [x] Add category-specific tariff validation and update workflow fixtures to canonical save inputs.
+- [x] Run the complete Task 3 GREEN verification matrix, self-review, report, and local commit.
+
 ## Review
 
 Implemented the shared Capitec-style shell, route-aware navigation, visual
@@ -66,6 +76,12 @@ IDs so active email-matched members remain part of unanimity.
 The final PDF path hardening removes caller control of `pdf_url` from document
 status updates and validates stored paths against the exact owner, document ID,
 and document type namespace used by server-side generation before signing.
+
+Task 3 now uses one strict canonical input contract for analysis and persistence,
+recomputes every saved decision through the worker inside an atomic database
+transaction, exposes evidence-aware capacity limits without sentinel values,
+supports luxury units and explicit tariff years, and rejects semantically invalid
+tariff writes before they reach storage.
 
 Verification: `supabase migration up --local`, live capital API read/write,
 Viewer 403 checks for capital/settings/tariffs, `pnpm --filter web typecheck`,

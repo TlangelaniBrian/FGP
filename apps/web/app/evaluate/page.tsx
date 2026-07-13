@@ -32,8 +32,9 @@ const schema = z.object({
   zone_code: z.enum(["RES1", "RES2", "RES3", "RES4", "COM1"]),
   size_sqm: z.number().min(100).max(1_000_000),
   price: z.number().min(10_000).max(500_000_000),
-  unit_type: z.enum(["bachelor", "1bed", "2bed"]),
+  unit_type: z.enum(["bachelor", "1bed", "2bed", "luxury"]),
   target_units: z.number().int().min(1).max(200),
+  tariff_year: z.number().int().min(2024).max(2030),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -45,7 +46,7 @@ export default function EvaluatePage() {
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { municipality: "johannesburg", zone_code: "RES3", unit_type: "bachelor", target_units: 8 },
+    defaultValues: { municipality: "johannesburg", zone_code: "RES3", unit_type: "bachelor", target_units: 8, tariff_year: 2026 },
   });
 
   async function onSubmit(values: FormValues) {
@@ -78,6 +79,8 @@ export default function EvaluatePage() {
       {
         address: values.address, municipality: values.municipality, zoneCode: values.zone_code,
         sizeSqm: values.size_sqm, price: values.price, unitType: values.unit_type, targetUnits: values.target_units,
+        tariffYear: data.tariff_year, decisionStatus: data.decision_status,
+        zoningEvidenceAvailable: data.zoning_evidence_available,
         viable: data.viable, score: data.score, actualUnits: data.actual_units,
         maxUnitsAllowed: data.max_units_allowed, rezoningRequired: data.rezoning_required,
         maxFootprintSqm: data.max_footprint_sqm, maxBuildableSqm: data.max_buildable_sqm,
@@ -143,6 +146,7 @@ export default function EvaluatePage() {
               <option value="bachelor">Bachelor (35m²)</option>
               <option value="1bed">1 Bedroom (55m²)</option>
               <option value="2bed">2 Bedroom (85m²)</option>
+              <option value="luxury">Luxury (120m²)</option>
             </select>
           </div>
           <div>
@@ -150,6 +154,11 @@ export default function EvaluatePage() {
             <input type="number" {...register("target_units", { valueAsNumber: true })} className={field} />
             {errors.target_units && <p className={err}>{errors.target_units.message}</p>}
           </div>
+        </div>
+        <div>
+          <label className={label}>Tariff Year</label>
+          <input type="number" min={2024} max={2030} {...register("tariff_year", { valueAsNumber: true })} className={field} />
+          {errors.tariff_year && <p className={err}>{errors.tariff_year.message}</p>}
         </div>
         {submitError && (
           <div

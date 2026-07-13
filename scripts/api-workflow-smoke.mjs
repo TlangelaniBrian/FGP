@@ -210,12 +210,32 @@ try {
   assert.equal(result.response.status, 201, JSON.stringify(result.payload));
   listingId = track("listings", result.payload).id;
 
-  result = await api("/api/feasibility/save", token, { method: "POST", body: JSON.stringify({ address: `Workflow Smoke Stand ${marker}`, municipality: "johannesburg", zoneCode: "RES3", sizeSqm: 720, price: 1250000, unitType: "1bed", targetUnits: 8, viable: true, score: 82, actualUnits: 8, maxUnitsAllowed: 10, rezoningRequired: false, maxFootprintSqm: 432, maxBuildableSqm: 1080, costLand: 1250000, costBuild: 6248000, costProfessionalFees: 749760, costBulkContributions: 400000, costTransferDuty: 0, costTotal: 8645760, rentPerUnitMonthly: 8500, grossMonthlyIncome: 68000, grossAnnualIncome: 816000, yieldGrossPct: 9.44, yieldAt85OccPct: 8.02, viabilityNotes: marker, dolomiteRisk: "LOW" }) });
+  const canonicalFeasibility = { address: `Workflow Smoke Stand ${marker}`, municipality: "johannesburg", zone_code: "RES3", size_sqm: 720, price: 1250000, unit_type: "1bed", target_units: 8, tariff_year: 2026 };
+  const forgedAddress = `Forged Workflow Smoke Stand ${marker}`;
+  result = await api("/api/feasibility/save", token, { method: "POST", body: JSON.stringify({ ...canonicalFeasibility, address: forgedAddress, viable: true, score: 100, cost_total: 1, yield_at_85_occ_pct: 999, viability_notes: marker, dolomite_risk: "LOW" }) });
+  assert.equal(result.response.status, 422, JSON.stringify(result.payload));
+  result = await api("/api/feasibility/save", token, { method: "POST", body: JSON.stringify({ address: forgedAddress, municipality: "johannesburg", zoneCode: "RES3", sizeSqm: 720, price: 1250000, unitType: "1bed", targetUnits: 8, viable: true, score: 100, actualUnits: 8, maxUnitsAllowed: 9999, rezoningRequired: false, maxFootprintSqm: 9999, maxBuildableSqm: 9999, costLand: 1, costBuild: 1, costProfessionalFees: 1, costBulkContributions: 1, costTransferDuty: 1, costTotal: 1, rentPerUnitMonthly: 999999, grossMonthlyIncome: 999999, grossAnnualIncome: 999999, yieldGrossPct: 999, yieldAt85OccPct: 999, viabilityNotes: marker, dolomiteRisk: "LOW" }) });
+  assert.equal(result.response.status, 422, JSON.stringify(result.payload));
+  const forgedListings = await supabase(`/rest/v1/listings?address=eq.${encodeURIComponent(forgedAddress)}&select=id`);
+  assert.deepEqual(forgedListings, [], "forged feasibility outputs created a listing");
+
+  const existingBuildRates = await supabase("/rest/v1/tariffs?tariff_year=eq.2026&category=eq.build_rates&select=data");
+  result = await api("/api/tariffs", token, { method: "PUT", body: JSON.stringify({ year: 2026, category: "build_rates", data: { bachelor: -1, "1bed": 14200, "2bed": 15000, luxury: 18500 } }) });
+  assert.equal(result.response.status, 422, JSON.stringify(result.payload));
+  const buildRatesAfterInvalidWrite = await supabase("/rest/v1/tariffs?tariff_year=eq.2026&category=eq.build_rates&select=data");
+  assert.deepEqual(buildRatesAfterInvalidWrite, existingBuildRates, "invalid tariff payload was persisted");
+
+  result = await api("/api/feasibility/save", token, { method: "POST", body: JSON.stringify(canonicalFeasibility) });
   assert.equal(result.response.status, 200, JSON.stringify(result.payload));
   listingId = result.payload.listingId;
   reportId = result.payload.reportId;
   track("listings", { id: listingId });
   track("feasibility_reports", { id: reportId });
+  const [savedReport] = await supabase(`/rest/v1/feasibility_reports?id=eq.${reportId}&select=viable,cost_total,yield_at_85_occ_pct,viability_notes,tariff_year`);
+  assert.notEqual(Number(savedReport.cost_total), 1, "saved report persisted forged total cost");
+  assert.notEqual(Number(savedReport.yield_at_85_occ_pct), 999, "saved report persisted forged yield");
+  assert.notEqual(savedReport.viability_notes, marker, "saved report persisted forged notes");
+  assert.equal(savedReport.tariff_year, 2026);
 
   result = await api(`/api/listings/${listingId}/link-parcel`, token, { method: "POST", body: JSON.stringify({ lat: -25.976, lng: 28.13 }) });
   assert.equal(result.response.status, 200, JSON.stringify(result.payload));

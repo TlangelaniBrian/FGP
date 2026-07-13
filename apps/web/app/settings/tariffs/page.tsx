@@ -126,8 +126,8 @@ export default function TariffsAdminPage() {
           <input
             type="number"
             value={year}
-            min={2000}
-            max={2100}
+            min={2024}
+            max={2030}
             onChange={(e) => setYear(parseInt(e.target.value, 10) || year)}
             className={`${field} w-24`}
             disabled={!canEdit}

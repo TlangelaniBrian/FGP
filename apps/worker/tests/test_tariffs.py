@@ -1,11 +1,11 @@
 import math
 
+from services.calculations import calculate_feasibility_score
 from services.tariffs import (
     Tariffs,
     default_tariffs,
     tariffs_from_rows,
 )
-from services.calculations import calculate_feasibility_score
 
 
 def test_default_tariffs_shape():
@@ -14,6 +14,9 @@ def test_default_tariffs_shape():
     assert t.build_rates["bachelor"] == 13_500
     assert t.unit_sizes["2bed"] == 85
     assert t.market_rents["1bed"] == 6_500
+    assert t.unit_sizes["luxury"] == 120
+    assert t.market_rents["luxury"] == 18_000
+    assert t.bulk_contributions["johannesburg"]["luxury"] == (65_000, 80_000)
     assert t.professional_fee_pct == 0.12
     # Top bracket has no upper bound.
     assert math.isinf(t.transfer_duty_brackets[-1][0])
@@ -22,12 +25,27 @@ def test_default_tariffs_shape():
 def test_tariffs_from_rows_parses_db_jsonb():
     rows = {
         "build_rates": {"bachelor": 14000, "1bed": 15000, "2bed": 16000, "luxury": 19000},
-        "unit_sizes": {"bachelor": 36, "1bed": 56, "2bed": 86},
-        "market_rents": {"bachelor": 5000, "1bed": 7000, "2bed": 10000},
+        "unit_sizes": {"bachelor": 36, "1bed": 56, "2bed": 86, "luxury": 125},
+        "market_rents": {"bachelor": 5000, "1bed": 7000, "2bed": 10000, "luxury": 19000},
         "bulk_contributions": {
-            "johannesburg": {"bachelor": [46000, 66000], "1bed": [51000, 66000], "2bed": [56000, 66000]},
-            "tshwane": {"bachelor": [38000, 55000], "1bed": [42000, 55000], "2bed": [46000, 55000]},
-            "ekurhuleni": {"bachelor": [40000, 58000], "1bed": [44000, 58000], "2bed": [48000, 58000]},
+            "johannesburg": {
+                "bachelor": [46000, 66000],
+                "1bed": [51000, 66000],
+                "2bed": [56000, 66000],
+                "luxury": [65000, 80000],
+            },
+            "tshwane": {
+                "bachelor": [38000, 55000],
+                "1bed": [42000, 55000],
+                "2bed": [46000, 55000],
+                "luxury": [55000, 70000],
+            },
+            "ekurhuleni": {
+                "bachelor": [40000, 58000],
+                "1bed": [44000, 58000],
+                "2bed": [48000, 58000],
+                "luxury": [58000, 73000],
+            },
         },
         "transfer_duty_brackets": [
             [1100000, 0.0, 0],

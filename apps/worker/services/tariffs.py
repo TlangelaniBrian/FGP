@@ -11,11 +11,12 @@ is unavailable, so feasibility results never break on a transient DB outage.
 The constants here MUST mirror scripts/seed/seed_tariffs.ts for TARIFF_YEAR=2026
 so behaviour is identical before and after migrating to the DB.
 """
+
 from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 log = logging.getLogger("fgp.tariffs")
@@ -32,6 +33,7 @@ UNIT_SIZES: dict[str, int] = {
     "bachelor": 35,
     "1bed": 55,
     "2bed": 85,
+    "luxury": 120,
 }
 
 # Flat {unit_type: monthly_rent}. The legacy calculations module nested these
@@ -40,12 +42,28 @@ MARKET_RENT_2026: dict[str, int] = {
     "bachelor": 4_500,
     "1bed": 6_500,
     "2bed": 9_500,
+    "luxury": 18_000,
 }
 
 BULK_RATES_2026: dict[str, dict[str, tuple[float, float]]] = {
-    "johannesburg": {"bachelor": (45_000, 65_000), "1bed": (50_000, 65_000), "2bed": (55_000, 65_000)},
-    "tshwane": {"bachelor": (38_000, 55_000), "1bed": (42_000, 55_000), "2bed": (46_000, 55_000)},
-    "ekurhuleni": {"bachelor": (40_000, 58_000), "1bed": (44_000, 58_000), "2bed": (48_000, 58_000)},
+    "johannesburg": {
+        "bachelor": (45_000, 65_000),
+        "1bed": (50_000, 65_000),
+        "2bed": (55_000, 65_000),
+        "luxury": (65_000, 80_000),
+    },
+    "tshwane": {
+        "bachelor": (38_000, 55_000),
+        "1bed": (42_000, 55_000),
+        "2bed": (46_000, 55_000),
+        "luxury": (55_000, 70_000),
+    },
+    "ekurhuleni": {
+        "bachelor": (40_000, 58_000),
+        "1bed": (44_000, 58_000),
+        "2bed": (48_000, 58_000),
+        "luxury": (58_000, 73_000),
+    },
 }
 
 # (upper_threshold, rate, cumulative_base); inf upper = top (no-bound) bracket.
@@ -123,22 +141,35 @@ def tariffs_from_rows(year: int, rows: dict[str, Any]) -> Tariffs:
 
     if "build_rates" in rows:
         try:
-            build_rates = {k: int(v) for k, v in rows["build_rates"].items()}
+            build_rates = {
+                **base.build_rates,
+                **{k: int(v) for k, v in rows["build_rates"].items()},
+            }
         except (ValueError, TypeError, AttributeError) as e:
             log.warning("bad build_rates tariff row, using fallback: %s", e)
     if "unit_sizes" in rows:
         try:
-            unit_sizes = {k: int(v) for k, v in rows["unit_sizes"].items()}
+            unit_sizes = {**base.unit_sizes, **{k: int(v) for k, v in rows["unit_sizes"].items()}}
         except (ValueError, TypeError, AttributeError) as e:
             log.warning("bad unit_sizes tariff row, using fallback: %s", e)
     if "market_rents" in rows:
         try:
-            market_rents = {k: int(v) for k, v in rows["market_rents"].items()}
+            market_rents = {
+                **base.market_rents,
+                **{k: int(v) for k, v in rows["market_rents"].items()},
+            }
         except (ValueError, TypeError, AttributeError) as e:
             log.warning("bad market_rents tariff row, using fallback: %s", e)
     if "bulk_contributions" in rows:
         try:
-            bulk = _parse_bulk(rows["bulk_contributions"])
+            parsed_bulk = _parse_bulk(rows["bulk_contributions"])
+            bulk = {
+                municipality: {
+                    **rates,
+                    **parsed_bulk.get(municipality, {}),
+                }
+                for municipality, rates in base.bulk_contributions.items()
+            }
         except (ValueError, TypeError, AttributeError, IndexError) as e:
             log.warning("bad bulk_contributions tariff row, using fallback: %s", e)
     if "transfer_duty_brackets" in rows:

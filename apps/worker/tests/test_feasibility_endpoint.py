@@ -1,5 +1,5 @@
-import pytest
 from fastapi.testclient import TestClient
+
 from main import app
 
 client = TestClient(app)
@@ -40,3 +40,23 @@ def test_feasibility_size_too_small():
     payload = {**VALID_PAYLOAD, "size_sqm": 50}
     resp = client.post("/analyze/feasibility", json=payload)
     assert resp.status_code == 422
+
+
+def test_feasibility_accepts_luxury_and_explicit_tariff_year():
+    payload = {
+        **VALID_PAYLOAD,
+        "unit_type": "luxury",
+        "tariff_year": 2027,
+        "zone_rules": {
+            "coverage_pct": 50,
+            "far": 1.0,
+            "max_storeys": 2,
+            "max_units_per_erf": 10,
+        },
+    }
+    resp = client.post("/analyze/feasibility", json=payload)
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["tariff_year"] == 2027
+    assert data["cost_build"] == 8 * 120 * 18_500

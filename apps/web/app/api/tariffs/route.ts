@@ -5,28 +5,84 @@ import { and, eq } from "drizzle-orm";
 import { getAuthenticatedActor, requireSessionCapability } from "@/lib/portal-auth";
 
 const DEFAULT_YEAR = 2026;
+const tariffYearSchema = z.number().int().min(2024).max(2030);
+const positive = z.number().positive().finite();
 
-// The set of categories the worker understands. Editing anything outside this
-// list would be silently ignored by the feasibility engine, so we reject it.
-const CATEGORIES = [
-  "build_rates",
-  "unit_sizes",
-  "market_rents",
-  "bulk_contributions",
-  "transfer_duty_brackets",
-  "fees",
-] as const;
+const unitValuesSchema = z.object({
+  bachelor: positive,
+  "1bed": positive,
+  "2bed": positive,
+  luxury: positive,
+}).strict();
 
-const parseYear = (raw: string | null) => {
-  const n = parseInt(raw ?? "", 10);
-  return Number.isNaN(n) ? DEFAULT_YEAR : n;
-};
+const bulkRangeSchema = z.tuple([positive, positive]).refine(
+  ([minimum, maximum]) => minimum <= maximum,
+  "bulk contribution minimum must not exceed maximum",
+);
+
+const municipalityBulkSchema = z.object({
+  bachelor: bulkRangeSchema,
+  "1bed": bulkRangeSchema,
+  "2bed": bulkRangeSchema,
+  luxury: bulkRangeSchema,
+}).strict();
+
+const bulkSchema = z.object({
+  johannesburg: municipalityBulkSchema,
+  tshwane: municipalityBulkSchema,
+  ekurhuleni: municipalityBulkSchema,
+}).strict();
+
+const dutyBracketSchema = z.tuple([
+  z.number().positive().finite().nullable(),
+  z.number().min(0).max(1).finite(),
+  z.number().nonnegative().finite(),
+]);
+
+const dutyBracketsSchema = z.array(dutyBracketSchema).min(2).superRefine((brackets, ctx) => {
+  let previousUpper = -Infinity;
+  let previousBase = -Infinity;
+  brackets.forEach(([upper, , base], index) => {
+    if (upper === null && index !== brackets.length - 1) {
+      ctx.addIssue({ code: "custom", path: [index, 0], message: "only the final bracket may have no upper bound" });
+    }
+    if (upper !== null && upper <= previousUpper) {
+      ctx.addIssue({ code: "custom", path: [index, 0], message: "bracket upper bounds must be strictly increasing" });
+    }
+    if (base < previousBase) {
+      ctx.addIssue({ code: "custom", path: [index, 2], message: "bracket cumulative bases must be ordered" });
+    }
+    if (upper !== null) previousUpper = upper;
+    previousBase = base;
+  });
+  if (brackets.at(-1)?.[0] !== null) {
+    ctx.addIssue({ code: "custom", path: [brackets.length - 1, 0], message: "final bracket must have no upper bound" });
+  }
+});
+
+const writeBase = { year: tariffYearSchema.default(DEFAULT_YEAR) };
+const putSchema = z.discriminatedUnion("category", [
+  z.object({ ...writeBase, category: z.literal("build_rates"), data: unitValuesSchema }).strict(),
+  z.object({ ...writeBase, category: z.literal("unit_sizes"), data: unitValuesSchema }).strict(),
+  z.object({ ...writeBase, category: z.literal("market_rents"), data: unitValuesSchema }).strict(),
+  z.object({ ...writeBase, category: z.literal("bulk_contributions"), data: bulkSchema }).strict(),
+  z.object({ ...writeBase, category: z.literal("transfer_duty_brackets"), data: dutyBracketsSchema }).strict(),
+  z.object({
+    ...writeBase,
+    category: z.literal("fees"),
+    data: z.object({ professional_fee_pct: z.number().positive().max(0.3).finite() }).strict(),
+  }).strict(),
+]);
 
 // GET /api/tariffs?year=2026 → { year, tariffs: { category: data, ... } }
 export async function GET(req: NextRequest) {
   if (!await getAuthenticatedActor(req)) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const { searchParams } = new URL(req.url);
-  const year = parseYear(searchParams.get("year"));
+  const parsedYear = tariffYearSchema.safeParse(Number(searchParams.get("year") ?? DEFAULT_YEAR));
+  if (!parsedYear.success) {
+    return NextResponse.json({ error: parsedYear.error.flatten() }, { status: 422 });
+  }
+  const year = parsedYear.data;
 
   const rows = await db
     .select()
@@ -39,14 +95,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ year, tariffs: grouped });
 }
 
-const putSchema = z.object({
-  year: z.number().int().min(2000).max(2100).optional(),
-  category: z.enum(CATEGORIES),
-  // `data` shape varies per category (object or array), validated by the worker
-  // loader on read; here we only require it to be present JSON.
-  data: z.union([z.record(z.string(), z.unknown()), z.array(z.unknown())]),
-});
-
 // PUT /api/tariffs → upsert one category for a year.
 export async function PUT(req: NextRequest) {
   const guard = await requireSessionCapability("tariff", req);
@@ -57,7 +105,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });
   }
 
-  const year = parsed.data.year ?? DEFAULT_YEAR;
+  const year = parsed.data.year;
   const { category, data } = parsed.data;
 
   const [row] = await db
