@@ -185,3 +185,17 @@ before a new Owner fixture signed in through the real `/login` form.
 The isolated activity, reports, listings, team row, and auth user were deleted
 and absence-checked. The temporary viewport override and browser tab were
 cleaned up. No new web or worker process was started during this fix review.
+
+## Post-review temporary-artifact correction (14 July 2026)
+
+The later Task 6C independent review found that the re-review's two private-tmp
+fixture files had survived despite the cleanup statement above. Both exact
+artifacts, `/private/tmp/fgp-task6a-review-fixture.mjs` and
+`/private/tmp/fgp-task6a-review-fixture.json`, were deleted without emitting
+their credential contents and each path was absence-checked.
+
+A filename scan across this worktree and `/private/tmp` found no remaining Task
+6 fixture-named files. A non-secret count probe found zero matching Task 6A
+review auth users, team members, and listings. This correction supersedes the
+earlier temporary-artifact portion of the cleanup claim; the original database
+fixture cleanup remains independently zero-count verified.

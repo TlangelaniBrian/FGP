@@ -18,9 +18,12 @@ const DEFINITIONS = [
 ] as const;
 
 export function buildCostBreakdownRows(costs: CostBreakdown) {
+  const total = Number.isFinite(costs.costTotal) && costs.costTotal > 0 ? costs.costTotal : 0;
+
   return DEFINITIONS.map(({ key, label, tone }) => {
-    const value = costs[key];
-    const rawPercentage = costs.costTotal > 0 ? (value / costs.costTotal) * 100 : 0;
+    const inputValue = costs[key];
+    const value = Number.isFinite(inputValue) && inputValue >= 0 ? inputValue : 0;
+    const rawPercentage = total > 0 ? (value / total) * 100 : 0;
     const percentage = Math.min(100, Math.max(0, rawPercentage));
     return { label, tone, value, formattedValue: formatZar(value), percentage };
   });

@@ -115,3 +115,59 @@ uses semantic theme tokens and maroon `#A5132A` only for danger treatment.
 None blocking. Map tiles and WebGL remain runtime dependencies with the already
 verified Task 6A/6B degradation paths. Cost Oracle deliberately omits report
 export until the canonical PDF task supplies a real action.
+
+## Independent review correction — finite cost-bar contract
+
+### RED evidence
+
+The independent review reproduced that the pure helper passed non-finite values
+through to both presentation and progress state. Before the production change,
+new executable cases failed with the production results:
+
+```text
+AssertionError: Non-finite costs must render as exact zero money and every valid fractional ratio must stay finite
+actual: R NaN / percentage NaN; R infinity / percentage 100; R -infinity / percentage 0
+expected: R 0.00 / percentage 0 for every invalid cost
+```
+
+The same RED run separately proved that finite fractional ratios remain
+unrounded and deterministic.
+
+### Fix
+
+`buildCostBreakdownRows` now sanitizes every non-finite or negative cost to zero
+before formatting or percentage calculation. It separately accepts only a
+finite, positive total; all other totals produce zero widths. The one resulting
+finite percentage remains the shared source for `aria-valuenow` and CSS width,
+so accessible and visual progress cannot diverge.
+
+Executable coverage now includes `NaN`, positive infinity and negative infinity
+for row costs; `NaN`, both infinities, zero and negative totals; exact
+`R 0.00`; finite fractional ratios; and the invariant that every percentage is
+finite and within 0..100.
+
+### Cleanup correction
+
+The review also found two stale Task 6A re-review files containing fixture
+credentials. The exact `.mjs` and `.json` paths were deleted without printing
+their contents and absence-checked. A worktree plus `/private/tmp` filename scan
+found no remaining Task 6 fixture artifacts, its scan helper was removed, and a
+non-secret count probe found zero corresponding auth users, team members, and
+listings. The tracked Task 6A report now records and supersedes its incomplete
+temporary-artifact cleanup statement.
+
+### GREEN evidence
+
+- `pnpm test:signature-views` — PASS, including direct production-helper
+  execution for negative, `NaN`, both infinities, invalid totals, fractional
+  ratios and the finite 0..100 invariant.
+- `pnpm test:ui-foundation` — PASS.
+- `pnpm --filter web typecheck` — PASS.
+- `pnpm --filter web lint` — PASS.
+- production-environment `pnpm --filter web build` — PASS, 26/26 pages.
+- `git diff --check` — PASS.
+- Exact stale fixture paths — absent; worktree plus `/private/tmp` Task 6
+  fixture-name scan — zero; corresponding auth/member/listing counts — zero.
+
+No authenticated runtime rerun was needed because this correction changes only
+the pure presentation helper and its executable smoke/report evidence.

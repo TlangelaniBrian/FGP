@@ -264,11 +264,11 @@ assert.deepEqual(
   [
     { label: "Land", formattedValue: "R 250.00", percentage: 25 },
     { label: "Build", formattedValue: "R 0.00", percentage: 0 },
-    { label: "Professional fees", formattedValue: "R -20.00", percentage: 0 },
+    { label: "Professional fees", formattedValue: "R 0.00", percentage: 0 },
     { label: "Bulk contributions", formattedValue: "R 1 500.00", percentage: 100 },
     { label: "Transfer duty", formattedValue: "R 50.00", percentage: 5 },
   ],
-  "Cost rows must preserve exact money while clamping zero, negative, and over-total widths",
+  "Cost rows must preserve exact valid money while sanitizing negative values and clamping over-total widths",
 );
 assert.deepEqual(
   costBreakdown.buildCostBreakdownRows({
@@ -282,6 +282,49 @@ assert.deepEqual(
   [0, 0, 0, 0, 0],
   "A non-positive trusted total must produce zero-width bars",
 );
+const nonFiniteCostRows = costBreakdown.buildCostBreakdownRows({
+  costLand: Number.NaN,
+  costBuild: Number.POSITIVE_INFINITY,
+  costProfessionalFees: Number.NEGATIVE_INFINITY,
+  costBulkContributions: 1,
+  costTransferDuty: 2,
+  costTotal: 3,
+});
+assert.deepEqual(
+  nonFiniteCostRows.map((row: { formattedValue: string; percentage: number }) => ({
+    formattedValue: row.formattedValue,
+    percentage: row.percentage,
+  })),
+  [
+    { formattedValue: "R 0.00", percentage: 0 },
+    { formattedValue: "R 0.00", percentage: 0 },
+    { formattedValue: "R 0.00", percentage: 0 },
+    { formattedValue: "R 1.00", percentage: (1 / 3) * 100 },
+    { formattedValue: "R 2.00", percentage: (2 / 3) * 100 },
+  ],
+  "Non-finite costs must render as exact zero money and every valid fractional ratio must stay finite",
+);
+assert.equal(
+  nonFiniteCostRows.every((row: { percentage: number }) => Number.isFinite(row.percentage) && row.percentage >= 0 && row.percentage <= 100),
+  true,
+  "Every cost percentage must be finite and clamped to the progress range",
+);
+for (const invalidTotal of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
+  const invalidTotalRows = costBreakdown.buildCostBreakdownRows({
+    costLand: 1,
+    costBuild: 2,
+    costProfessionalFees: 3,
+    costBulkContributions: 4,
+    costTransferDuty: 5,
+    costTotal: invalidTotal,
+  });
+  assert.deepEqual(
+    invalidTotalRows.map((row: { percentage: number }) => row.percentage),
+    [0, 0, 0, 0, 0],
+    "Every non-finite or non-positive total must produce zero-width bars",
+  );
+  assert.equal(invalidTotalRows.every((row: { percentage: number }) => Number.isFinite(row.percentage)), true);
+}
 const costBreakdownSource = source("apps/web/app/evaluate/result/_components/CostBreakdownBars.tsx");
 for (const contract of [
   /role=["']progressbar["']/,
