@@ -3,7 +3,8 @@
 **Date:** 2026-07-15  
 **Branch:** `pull-new-designs`  
 **Isolated worktree:** `/private/tmp/fgp-pull-new-designs-validation.CtdZIq`  
-**Current HEAD:** `daede9f`
+**Reviewed implementation through:** `daede9f`
+**Documentation checkpoint:** `547c0e3`
 
 ## Decisions locked
 
@@ -30,6 +31,7 @@
 - No Task 7B production file has been modified and no Task 7B commit exists.
 - `.superpowers/audits/` remains unrelated and untracked.
 - `.learnings/ERRORS.md` contains controller-only local validation notes and is intentionally uncommitted.
+- The completed branch scope is ready to publish as a draft PR; Task 7B and all later goal slices remain explicitly outside that completed scope.
 
 ## Exact next steps
 
