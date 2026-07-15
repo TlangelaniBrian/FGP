@@ -10,6 +10,7 @@
     "test:auth-roles": "node scripts/auth-role-smoke.mjs",
     "test:capital-governance": "node scripts/capital-governance-smoke.mjs",
     "test:capital-governance:migration": "bash scripts/capital-governance-migration-replay.sh",
+    "test:settings-controls": "tsx scripts/settings-controls-smoke.ts",
     "test:ui-foundation": "tsx scripts/ui-foundation-smoke.ts",
     "test:signature-views": "tsx scripts/signature-views-smoke.ts",
     "check:production": "node scripts/production-preflight.mjs",

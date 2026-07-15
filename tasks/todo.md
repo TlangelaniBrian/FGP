@@ -100,6 +100,14 @@
 - [ ] Verify Owner, Chairperson, Treasurer, Analyst, and Viewer behavior in authenticated API and browser matrices.
 - [ ] Run the whole Task 7 review and close the completion-audit item only when approved.
 
+### Task 7A strict persisted Settings controls
+
+- [x] Capture RED for the missing strict settings contract and complete UI controls.
+- [x] Add the seven-key strict settings schema, approved-key merge, and complete GET/PUT contract.
+- [x] Persist notification, scraper, auto-score, and threshold controls with authenticated role gating.
+- [x] Extend the authenticated role smoke with exact settings snapshot and restoration.
+- [x] Run the complete Task 7A GREEN verification matrix and self-review the focused diff.
+
 ## Review
 
 Implemented the shared Capitec-style shell, route-aware navigation, visual

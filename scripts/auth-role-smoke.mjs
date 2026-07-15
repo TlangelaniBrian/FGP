@@ -14,7 +14,24 @@ assert(serviceKey, "SUPABASE_SERVICE_ROLE_KEY is required");
 
 const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const password = "AuthRoleSmoke123!";
-const settingsKey = `auth_role_smoke_${runId.replaceAll("-", "_")}`;
+const settingsKeys = ["autoAnalyze", "scoreThreshold", "email", "whatsapp", "weekly", "digest", "scrapers"];
+const settingsFilter = encodeURIComponent(`(${settingsKeys.join(",")})`);
+const settingsPayload = {
+  autoAnalyze: true,
+  scoreThreshold: 75,
+  email: true,
+  whatsapp: true,
+  weekly: false,
+  digest: true,
+  scrapers: {
+    property24: true,
+    private_property: true,
+    propdata: false,
+    gumtree: false,
+    immo_africa: true,
+    entegral: true,
+  },
+};
 const identities = [
   { kind: "non-member", email: `fgp-auth-non-member-${runId}@example.com` },
   { kind: "invited", email: `fgp-auth-invited-${runId}@example.com`, role: "Owner", status: "invited" },
@@ -22,6 +39,8 @@ const identities = [
   { kind: "removed", email: `fgp-auth-removed-${runId}@example.com`, role: "Owner", status: "removed" },
   { kind: "viewer", email: `fgp-auth-viewer-${runId}@example.com`, role: "Viewer", status: "active" },
   { kind: "owner", email: `fgp-auth-owner-${runId}@example.com`, name: "Duplicate Approval Member", role: "Owner", status: "active" },
+  { kind: "chairperson", email: `fgp-auth-chairperson-${runId}@example.com`, role: "Chairperson", status: "active" },
+  { kind: "treasurer", email: `fgp-auth-treasurer-${runId}@example.com`, role: "Treasurer", status: "active" },
   { kind: "analyst", email: `fgp-auth-analyst-${runId}@example.com`, name: "Duplicate Approval Member", role: "Analyst", status: "active" },
   { kind: "unbound-analyst", email: `fgp-auth-unbound-${runId}@example.com`, name: "Duplicate Approval Member", role: "Analyst", status: "active", bindUserId: false },
 ];
@@ -33,6 +52,7 @@ const createdGoalProposals = [];
 const createdCorrectionProposals = [];
 const createdWorkspaceRecords = [];
 const regressionFailures = [];
+let settingsSnapshot = null;
 
 async function checkRegression(name, test) {
   try {
@@ -179,9 +199,20 @@ async function cleanup() {
     assert.deepEqual(rows, [], `team member ${memberId} was not cleaned up`);
   }
 
-  await admin(`/rest/v1/portal_settings?key=eq.${encodeURIComponent(settingsKey)}`, { method: "DELETE" });
-  const settingsRows = await admin(`/rest/v1/portal_settings?key=eq.${encodeURIComponent(settingsKey)}`);
-  assert.deepEqual(settingsRows, [], `portal setting ${settingsKey} was not cleaned up`);
+  if (settingsSnapshot) {
+    await admin(`/rest/v1/portal_settings?key=in.${settingsFilter}`, { method: "DELETE" });
+    if (settingsSnapshot.length > 0) {
+      await admin("/rest/v1/portal_settings", {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify(settingsSnapshot),
+      });
+    }
+    const restoredSettings = await admin(
+      `/rest/v1/portal_settings?key=in.${settingsFilter}&select=key,value,updated_by,updated_at&order=key.asc`,
+    );
+    assert.deepEqual(restoredSettings, settingsSnapshot, "approved settings rows were not restored exactly");
+  }
 
   for (const userId of createdUsers) {
     await admin(`/auth/v1/admin/users/${userId}`, { method: "DELETE" });
@@ -192,6 +223,9 @@ async function cleanup() {
 
 let primaryError;
 try {
+  settingsSnapshot = await admin(
+    `/rest/v1/portal_settings?key=in.${settingsFilter}&select=key,value,updated_by,updated_at&order=key.asc`,
+  );
   const sessions = Object.fromEntries(await Promise.all(identities.map(async (identity) => [identity.kind, await createIdentity(identity)])));
 
   await checkRegression("Viewer mutation controls", async () => {
@@ -239,17 +273,43 @@ try {
   assert.equal(result.response.status, 200, JSON.stringify(result.payload));
   assert.equal(result.payload.role, "Owner");
 
-  result = await api("/api/settings", sessions.owner.token, {
+  let persistedSettings;
+  for (const [index, kind] of ["owner", "chairperson", "treasurer", "analyst"].entries()) {
+    const expected = { ...settingsPayload, scoreThreshold: settingsPayload.scoreThreshold + index };
+    const write = await api("/api/settings", sessions[kind].token, {
+      method: "PUT",
+      body: JSON.stringify(expected),
+    });
+    assert.equal(write.response.status, 200, `${kind} settings write returned ${write.response.status}: ${JSON.stringify(write.payload)}`);
+    assert.deepEqual(write.payload, expected, `${kind} settings write returned an incomplete object`);
+    persistedSettings = expected;
+  }
+
+  const viewerWrite = await api("/api/settings", sessions.viewer.token, {
     method: "PUT",
-    body: JSON.stringify({ [settingsKey]: { verified: true, runId } }),
+    body: JSON.stringify(settingsPayload),
   });
-  assert.equal(result.response.status, 200, `Owner settings write returned ${result.response.status}: ${JSON.stringify(result.payload)}`);
-  assert.deepEqual(result.payload[settingsKey], { verified: true, runId });
+  assert.equal(viewerWrite.response.status, 403, `Viewer settings write returned ${viewerWrite.response.status}: ${JSON.stringify(viewerWrite.payload)}`);
+
+  for (const invalidPayload of [
+    { ...settingsPayload, capital_goal: 1 },
+    { autoAnalyze: true },
+  ]) {
+    const invalidWrite = await api("/api/settings", sessions.owner.token, {
+      method: "PUT",
+      body: JSON.stringify(invalidPayload),
+    });
+    assert.equal(invalidWrite.response.status, 422, `invalid settings write returned ${invalidWrite.response.status}: ${JSON.stringify(invalidWrite.payload)}`);
+  }
+
+  const persistedRead = await api("/api/settings", sessions.viewer.token);
+  assert.equal(persistedRead.response.status, 200, JSON.stringify(persistedRead.payload));
+  assert.deepEqual(persistedRead.payload, persistedSettings, "strict invalid writes changed persisted settings");
 
   await checkRegression("direct PostgREST active-member boundary", async () => {
     for (const kind of ["non-member", "invited", "suspended", "removed"]) {
       for (const path of [
-        `/rest/v1/portal_settings?key=eq.${encodeURIComponent(settingsKey)}&select=key`,
+        "/rest/v1/portal_settings?key=eq.autoAnalyze&select=key",
         "/rest/v1/team_members?select=id&limit=1",
       ]) {
         const read = await direct(path, sessions[kind].token);
@@ -257,9 +317,9 @@ try {
         assert.deepEqual(read.payload, [], `${kind} directly read workspace data from ${path}`);
       }
     }
-    const viewerRead = await direct(`/rest/v1/portal_settings?key=eq.${encodeURIComponent(settingsKey)}&select=key`, sessions.viewer.token);
+    const viewerRead = await direct("/rest/v1/portal_settings?key=eq.autoAnalyze&select=key", sessions.viewer.token);
     assert.equal(viewerRead.response.status, 200, JSON.stringify(viewerRead.payload));
-    assert.deepEqual(viewerRead.payload, [{ key: settingsKey }]);
+    assert.deepEqual(viewerRead.payload, [{ key: "autoAnalyze" }]);
   });
 
   await checkRegression("Viewer direct workspace writes", async () => {
@@ -364,7 +424,7 @@ try {
 
   assert.equal(regressionFailures.length, 0, `${regressionFailures.length} security regression checks failed`);
 
-  console.log("Authenticated role smoke passed: RLS, page boundary, Viewer controls, stable approvals, and cleanup asserted.");
+  console.log("Authenticated role smoke passed: strict settings roles and persistence, RLS, page boundary, Viewer controls, stable approvals, and exact cleanup asserted.");
 } catch (error) {
   primaryError = error;
 } finally {
