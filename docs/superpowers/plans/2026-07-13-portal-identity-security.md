@@ -59,4 +59,3 @@
 - [ ] Run the authenticated role smoke test and verify it passes.
 - [ ] Run `pnpm --filter web typecheck`, `pnpm --filter web lint`, and the existing API workflow smoke tests.
 - [ ] Verify in browser that an active Owner shows Owner controls, an active Viewer shows the read-only banner without mutation controls, and project list/detail render on port 3001 while `NEXT_PUBLIC_SITE_URL` differs.
-

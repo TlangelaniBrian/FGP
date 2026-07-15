@@ -1,8 +1,8 @@
 # Milestone — Settings complete, Tariffs at RED checkpoint
 
-**Date:** 2026-07-15  
-**Branch:** `pull-new-designs`  
-**Isolated worktree:** `/private/tmp/fgp-pull-new-designs-validation.CtdZIq`  
+**Date:** 2026-07-15
+**Branch:** `pull-new-designs`
+**Isolated worktree:** `/private/tmp/fgp-pull-new-designs-validation.CtdZIq`
 **Reviewed implementation through:** `daede9f`
 **Documentation checkpoint:** `547c0e3`
 
