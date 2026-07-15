@@ -10,9 +10,16 @@
 
 - Draft PR: https://github.com/TlangelaniBrian/FGP/pull/1
 - Target: `main`; head: `pull-new-designs`
-- Published completed-scope head before this documentation update: `4ae12b9`
+- Initial completed-scope publish: `4ae12b9`; current security-remediated head before this documentation update: `0b9b2f9`
 - Fresh PR verification passed: Settings/UI/signature smokes, typecheck, lint, 40 worker tests, authenticated role/workflow/capital smokes, migrations `0001–0018`, `git diff --check`, and the 26-page production build.
 - The PR is deliberately draft because Task 7B and the remaining full-product slices below are not claimed complete.
+
+### GitGuardian boundary
+
+- The first scan found two synthetic local-test passwords in historical commits: incident `27722495` in `scripts/capital-governance-migration-replay.sh` and incident `34833729` in `scripts/auth-role-smoke.mjs`.
+- Commit `0b9b2f9` removes all current literals, generates smoke credentials at runtime, adds `pnpm test:security-regression`, and passes that test plus authenticated role/workflow and migration replay gates.
+- GitGuardian continues to fail because it scans the full PR commit history and still sees the original occurrences.
+- No history rewrite or force-push was performed. Clear the check by classifying/resolving the synthetic incidents in GitGuardian, or explicitly authorize a branch-history rewrite before attempting it.
 
 ## Decisions locked
 
@@ -39,17 +46,18 @@
 - No Task 7B production file has been modified and no Task 7B commit exists.
 - `.superpowers/audits/` remains unrelated and untracked.
 - `.learnings/ERRORS.md` contains controller-only local validation notes and is intentionally uncommitted.
-- The completed branch scope is ready to publish as a draft PR; Task 7B and all later goal slices remain explicitly outside that completed scope.
+- The completed branch scope is published in draft PR #1; Task 7B and all later goal slices remain explicitly outside that completed scope.
 
 ## Exact next steps
 
 1. Read `docs/superpowers/plans/2026-07-15-settings-tariffs-controls.md`, `.superpowers/sdd/progress.md`, and this milestone.
-2. Inspect PR #1 checks and review feedback; address actionable findings on `pull-new-designs` before new feature work.
-3. Resume Task 7B from `scripts/tariff-controls-smoke.ts`; preserve the existing RED evidence and implement `apps/web/lib/tariff-editor.ts`, `TariffFields.tsx`, and the typed Tariffs page.
-4. Start Supabase, worker on `8001`, and web on `3001` with the explicit worker override before `test:api:workflow`.
-5. Run Task 7B focused smoke, authenticated workflow, typecheck, lint, and build; commit and dispatch a fresh task reviewer.
-6. Run the Task 7C authenticated browser matrix and whole Task 7 review.
-7. Continue the remaining goal slices: canonical municipal PDFs and worker authentication; real scraper/GIS and shared tenancy; durable browser visual regression and exact-host production deployment.
+2. Resolve/classify GitGuardian incidents `27722495` and `34833729`, or explicitly decide whether to rewrite branch history; confirm the PR check state afterward.
+3. Inspect PR #1 review feedback and address actionable findings on `pull-new-designs` before new feature work.
+4. Resume Task 7B from `scripts/tariff-controls-smoke.ts`; preserve the existing RED evidence and implement `apps/web/lib/tariff-editor.ts`, `TariffFields.tsx`, and the typed Tariffs page.
+5. Start Supabase, worker on `8001`, and web on `3001` with the explicit worker override before `test:api:workflow`.
+6. Run Task 7B focused smoke, authenticated workflow, typecheck, lint, and build; commit and dispatch a fresh task reviewer.
+7. Run the Task 7C authenticated browser matrix and whole Task 7 review.
+8. Continue the remaining goal slices: canonical municipal PDFs and worker authentication; real scraper/GIS and shared tenancy; durable browser visual regression and exact-host production deployment.
 
 ## Blockers
 
