@@ -6,7 +6,9 @@ cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 cleanup
 
-docker run --rm -d --name "$container" -e POSTGRES_PASSWORD=postgres \
+db_password="${FGP_MIGRATION_TEST_DB_PASSWORD:-$(node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("base64url"))')}"
+
+docker run --rm -d --name "$container" -e POSTGRES_PASSWORD="$db_password" \
   public.ecr.aws/supabase/postgres:17.6.1.131 >/dev/null
 
 for _ in $(seq 1 30); do

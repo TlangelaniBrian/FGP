@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import { attemptAll, createRunIdentity } from "./workflow-cleanup.mjs";
 
 const site = process.env.FGP_SITE_URL ?? "http://localhost:3000";
@@ -10,7 +11,7 @@ assert(serviceKey, "SUPABASE_SERVICE_ROLE_KEY is required");
 
 const { runId, marker, email, secondaryEmail, actorName } = createRunIdentity(process.env.FGP_WORKFLOW_RUN_ID);
 const workflowZoneCode = `SMK${runId.replace(/[^a-z0-9]/gi, "").slice(-12)}`.toUpperCase();
-const password = "WorkflowTest123!";
+const password = randomBytes(24).toString("base64url");
 let userId;
 let secondaryMemberId;
 let listingId;

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import supabaseSsr from "../apps/web/node_modules/@supabase/ssr/dist/main/index.js";
 
@@ -13,7 +14,7 @@ assert(anonKey, "NEXT_PUBLIC_SUPABASE_ANON_KEY is required");
 assert(serviceKey, "SUPABASE_SERVICE_ROLE_KEY is required");
 
 const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const password = "AuthRoleSmoke123!";
+const password = randomBytes(24).toString("base64url");
 const settingsKeys = ["autoAnalyze", "scoreThreshold", "email", "whatsapp", "weekly", "digest", "scrapers"];
 const settingsFilter = encodeURIComponent(`(${settingsKeys.join(",")})`);
 const settingsPayload = {
