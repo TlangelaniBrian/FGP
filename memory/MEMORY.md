@@ -3,7 +3,7 @@
 
 ## Current status
 - Active full-portal goal remains incomplete on branch `pull-new-designs` in isolated worktree `/private/tmp/fgp-pull-new-designs-validation.CtdZIq`.
-- Reviewed implementation reaches `daede9f`; the latest documentation checkpoint is `547c0e3`. The branch has not yet been pushed in this checkpoint.
+- Draft PR: https://github.com/TlangelaniBrian/FGP/pull/1 (`pull-new-designs` → `main`). Published review head before this documentation update: `4ae12b9`.
 - Tasks 1–6 are independently approved: identity/security, verification baseline, trusted feasibility, atomic capital governance, visual foundation, and Scout/Parcel/Cost Oracle.
 - Task 7A Settings is independently approved with no Critical/Important findings.
 - Task 7B Tariffs is paused at RED with untracked `scripts/tariff-controls-smoke.ts`; no production files changed.
@@ -12,7 +12,7 @@
 - Read [2026-07-15 milestone](milestones/2026-07-15-settings-tariffs-session.md).
 - Read `docs/superpowers/plans/2026-07-15-settings-tariffs-controls.md` and `.superpowers/sdd/progress.md`.
 - Resume Task 7B from the existing failing smoke, then complete Task 7C browser/whole-slice review.
-- Check the draft PR for review feedback before resuming implementation.
+- Check PR #1 review/check state before resuming implementation; address actionable feedback on `pull-new-designs`.
 - Do not modify the user checkout `/Users/tbmkhabela/Projects/Software/FGP` and do not push without a new user request.
 
 ## Local validation
