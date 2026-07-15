@@ -1,18 +1,23 @@
 import type { Metadata } from "next";
-import { Playfair_Display, DM_Mono } from "next/font/google";
+import localFont from "next/font/local";
+import "material-symbols/rounded.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
-import { Sidebar } from "./_components/Sidebar";
+import { AppShell } from "./_components/AppShell";
+import { db, projects } from "@fgp/database";
+import { desc, sql } from "drizzle-orm";
+import { getAuthenticatedActor } from "@/lib/portal-auth";
+import {
+  COLOUR_MODES,
+  COLOUR_MODE_PREFERENCE_KEY,
+  VISUAL_DIRECTIONS,
+  VISUAL_DIRECTION_PREFERENCE_KEY,
+} from "@/lib/portal-state";
 
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  weight: ["700"],
-  variable: "--font-playfair",
-});
-
-const dmMono = DM_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-dm-mono",
+const nunito = localFont({
+  src: "./fonts/NunitoSans-Variable.ttf",
+  variable: "--font-nunito",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -20,40 +25,31 @@ export const metadata: Metadata = {
   description: "Property development feasibility platform for Gauteng",
 };
 
+const preferenceBootstrap = `(() => {
+  const readPreference = (key, allowed, fallback) => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw === null) return fallback;
+      const value = JSON.parse(raw);
+      return allowed.includes(value) ? value : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  document.documentElement.dataset.mode = readPreference(${JSON.stringify(COLOUR_MODE_PREFERENCE_KEY)}, ${JSON.stringify(COLOUR_MODES)}, "light");
+  document.documentElement.dataset.dir = readPreference(${JSON.stringify(VISUAL_DIRECTION_PREFERENCE_KEY)}, ${JSON.stringify(VISUAL_DIRECTIONS)}, "classic");
+})();`;
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  let projects: { id: number; name: string; status: string }[] = [];
+  let projectRows: { id: number; name: string | null; status: string | null }[] = [];
+  let actor = null;
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/api/projects`,
-      { cache: "no-store" }
-    );
-    if (res.ok) projects = await res.json();
+    actor = await getAuthenticatedActor();
+    if (actor) projectRows = await db.select({ id: projects.id, name: projects.name, status: projects.status }).from(projects).where(sql`${projects.userId} = ${actor.userId}`).orderBy(desc(projects.createdAt)).limit(20);
   } catch {}
 
-  return (
-    <html lang="en" className={`${playfair.variable} ${dmMono.variable}`}>
-      <body className="bg-bg-base text-text-primary min-h-screen font-mono">
-        <header className="bg-bg-header border-b border-border sticky top-0 z-50 h-[58px] px-8 flex items-center gap-10">
-          <div className="flex items-center gap-2.5 flex-shrink-0">
-            <div className="w-7 h-7 rounded-md bg-gradient-to-br from-accent-blue to-accent-blue-dark flex items-center justify-center text-sm">
-              🏗
-            </div>
-            <div>
-              <div className="font-heading text-sm text-text-primary font-bold leading-none">First Generation</div>
-              <div className="font-mono text-[9px] text-text-muted tracking-[1.5px] uppercase">Properties</div>
-            </div>
-          </div>
-          <div className="flex-1" />
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center text-xs font-bold">TM</div>
-            <span className="font-mono text-xs text-text-muted">T. Mkhabela</span>
-          </div>
-        </header>
-        <div className="flex min-h-[calc(100vh-58px)]">
-          <Sidebar projects={projects} />
-          <main className="flex-1 overflow-auto">{children}</main>
-        </div>
-      </body>
-    </html>
-  );
+  return <html lang="en" className={nunito.variable} data-mode="light" data-dir="classic" suppressHydrationWarning>
+    <head><script dangerouslySetInnerHTML={{ __html: preferenceBootstrap }} /></head>
+    <body><AppShell actor={actor} projects={projectRows.map((project) => ({ id: project.id, name: project.name ?? "Untitled project", status: project.status ?? "planning" }))}>{children}</AppShell></body>
+  </html>;
 }

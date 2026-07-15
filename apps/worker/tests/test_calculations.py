@@ -1,10 +1,11 @@
 import pytest
+
 from services.calculations import (
-    calculate_transfer_duty,
-    calculate_bulk_contributions,
-    calculate_feasibility_score,
     BUILD_RATES_2026,
     UNIT_SIZES,
+    calculate_bulk_contributions,
+    calculate_feasibility_score,
+    calculate_transfer_duty,
 )
 
 
@@ -42,8 +43,13 @@ def test_feasibility_score_calculates_correctly():
         unit_type="bachelor",
         target_units=8,
         municipality="johannesburg",
-        zone_rules={"coverage_pct": 60, "far": 1.5, "max_storeys": 3,
-                    "max_units_per_erf": None, "max_units_per_ha": 80},
+        zone_rules={
+            "coverage_pct": 60,
+            "far": 1.5,
+            "max_storeys": 3,
+            "max_units_per_erf": None,
+            "max_units_per_ha": 80,
+        },
     )
     assert isinstance(result["viable"], bool)
     assert 0 <= result["score"] <= 100
@@ -55,7 +61,7 @@ def test_feasibility_score_calculates_correctly():
 
 def test_feasibility_score_viable():
     # Viability requires yield_85 >= 10% — achieved with very cheap land + high density
-    # land=R0 edge: 8u×4500×12×0.85 / (8u×35×13500×1.12 + 8×55000) = 367200/(5322240+440000) ≈ 6.3% → still not viable
+    # Even at R0 land, construction and bulk contributions keep yield near 6.3%.
     # Real Gauteng market: BSC ~R40-65k/unit makes 10% hard. Test the boundary at land=R1 instead.
     # Use 2-bed with higher rent (R9500/mo) to test viable path
     result = calculate_feasibility_score(
@@ -64,8 +70,13 @@ def test_feasibility_score_viable():
         unit_type="2bed",
         target_units=30,
         municipality="johannesburg",
-        zone_rules={"coverage_pct": 70, "far": 2.5, "max_storeys": 4,
-                    "max_units_per_erf": None, "max_units_per_ha": 120},
+        zone_rules={
+            "coverage_pct": 70,
+            "far": 2.5,
+            "max_storeys": 4,
+            "max_units_per_erf": None,
+            "max_units_per_ha": 120,
+        },
     )
     assert isinstance(result["viable"], bool)
     assert 0 <= result["score"] <= 100
@@ -80,8 +91,13 @@ def test_feasibility_score_not_viable_overpriced():
         unit_type="bachelor",
         target_units=2,
         municipality="johannesburg",
-        zone_rules={"coverage_pct": 40, "far": 0.5, "max_storeys": 2,
-                    "max_units_per_erf": 1, "max_units_per_ha": None},
+        zone_rules={
+            "coverage_pct": 40,
+            "far": 0.5,
+            "max_storeys": 2,
+            "max_units_per_erf": 1,
+            "max_units_per_ha": None,
+        },
     )
     assert result["viable"] is False
 
@@ -96,3 +112,103 @@ def test_input_bounds_rejected():
             municipality="johannesburg",
             zone_rules={},
         )
+
+
+def test_luxury_uses_complete_tariff_defaults():
+    result = calculate_feasibility_score(
+        land_price=1_000_000,
+        size_sqm=2_000,
+        unit_type="luxury",
+        target_units=2,
+        municipality="johannesburg",
+        zone_rules={
+            "coverage_pct": 50,
+            "far": 1.0,
+            "max_storeys": 2,
+            "max_units_per_erf": 10,
+        },
+    )
+
+    assert UNIT_SIZES["luxury"] == 120
+    assert BUILD_RATES_2026["luxury"] == 18_500
+    assert result["cost_build"] == 2 * 120 * 18_500
+    assert result["rent_per_unit_monthly"] == 18_000
+
+
+def test_capacity_enforces_far_and_footprint_storeys():
+    result = calculate_feasibility_score(
+        land_price=1_000_000,
+        size_sqm=1_000,
+        unit_type="bachelor",
+        target_units=20,
+        municipality="johannesburg",
+        zone_rules={
+            "coverage_pct": 10,
+            "far": 0.5,
+            "max_storeys": 2,
+            "max_units_per_erf": None,
+            "max_units_per_ha": None,
+        },
+    )
+
+    assert result["capacity"]["density_units"] is None
+    assert result["capacity"]["far_units"] == 14
+    assert result["capacity"]["footprint_storey_units"] == 5
+    assert result["max_units_allowed"] == 5
+    assert result["actual_units"] == 5
+
+
+def test_unknown_density_is_nullable_not_a_sentinel():
+    result = calculate_feasibility_score(
+        land_price=1_000_000,
+        size_sqm=1_000,
+        unit_type="bachelor",
+        target_units=3,
+        municipality="johannesburg",
+        zone_rules={"coverage_pct": 50, "far": 0.5, "max_storeys": 2},
+    )
+
+    assert result["capacity"]["density_units"] is None
+    assert result["max_units_allowed"] == 14
+    assert result["max_units_allowed"] != 9999
+
+
+def test_missing_zoning_evidence_prevents_definitive_viability():
+    result = calculate_feasibility_score(
+        land_price=1,
+        size_sqm=5_000,
+        unit_type="2bed",
+        target_units=30,
+        municipality="johannesburg",
+        zone_rules=None,
+    )
+
+    assert result["decision_status"] == "degraded"
+    assert result["zoning_evidence_available"] is False
+    assert result["viable"] is False
+    assert result["max_units_allowed"] is None
+    assert result["max_footprint_sqm"] is None
+    assert result["max_buildable_sqm"] is None
+    assert "zoning" in result["viability_notes"].lower()
+
+
+def test_all_null_zoning_row_is_not_authoritative_evidence():
+    result = calculate_feasibility_score(
+        land_price=1,
+        size_sqm=5_000,
+        unit_type="2bed",
+        target_units=30,
+        municipality="johannesburg",
+        zone_rules={
+            "coverage_pct": None,
+            "far": None,
+            "max_storeys": None,
+            "max_units_per_erf": None,
+            "max_units_per_ha": None,
+        },
+    )
+
+    assert result["decision_status"] == "degraded"
+    assert result["zoning_evidence_available"] is False
+    assert result["viable"] is False
+    assert result["max_units_allowed"] is None

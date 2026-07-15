@@ -1,24 +1,29 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
 
-// MapLibre GL is loaded from a CDN at runtime so the dependency stays out of the
-// lockfile (per the project's "no Mapbox / keep deps lean" stance). If the CDN
-// is unreachable the component degrades to a coordinate-only panel — the parent
-// still works via manual lat/lng entry.
-const MAPLIBRE_VERSION = "4.7.1";
-const MAPLIBRE_JS = `https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/${MAPLIBRE_VERSION}/maplibre-gl.min.js`;
-const MAPLIBRE_CSS = `https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/${MAPLIBRE_VERSION}/maplibre-gl.min.css`;
+import { useEffect, useMemo, useRef, useState } from "react";
+import maplibregl, {
+  type Map as MapLibreMap,
+  type Marker,
+  type StyleSpecification,
+} from "maplibre-gl";
+import {
+  addAccessibleListingMarker,
+  restoreCoordinateMarkerSemantics,
+} from "@/lib/scout-marker";
+import {
+  parseSelectedParcelGeoJSON,
+  type SelectedParcelGeoJSON,
+} from "@/lib/parcel-geometry";
 
-// CARTO dark raster basemap — free, no API key, matches the dark aesthetic.
-const DARK_STYLE = {
+const MAP_STYLE: StyleSpecification = {
   version: 8,
   sources: {
     carto: {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
       ],
       tileSize: 256,
       attribution: "© OpenStreetMap contributors © CARTO",
@@ -27,128 +32,242 @@ const DARK_STYLE = {
   layers: [{ id: "carto", type: "raster", source: "carto" }],
 };
 
-// Midrand — centre of the pilot area.
 const DEFAULT_CENTER: [number, number] = [28.13, -25.99];
+const SELECTED_PARCEL_SOURCE = "selected-parcel";
+const SELECTED_PARCEL_FILL = "selected-parcel-fill";
+const SELECTED_PARCEL_LINE = "selected-parcel-line";
 
-declare global {
-  interface Window {
-    maplibregl?: any;
-  }
+export type ScoutMapListing = {
+  id: number;
+  address: string | null;
+  suburb: string | null;
+  zoneCode: string | null;
+  dolomiteRisk: string | null;
+  feasibilityScore: number | null;
+  latitude: number;
+  longitude: number;
+};
+
+type Coord = { lat: number; lng: number };
+
+function scoreBand(score: number | null): "high" | "medium" | "low" | "unscored" {
+  if (score === null) return "unscored";
+  if (score >= 80) return "high";
+  if (score >= 60) return "medium";
+  return "low";
 }
 
-let loaderPromise: Promise<any> | null = null;
-function loadMapLibre(): Promise<any> {
-  if (typeof window === "undefined") return Promise.reject(new Error("no window"));
-  if (window.maplibregl) return Promise.resolve(window.maplibregl);
-  if (loaderPromise) return loaderPromise;
-
-  loaderPromise = new Promise((resolve, reject) => {
-    if (!document.querySelector(`link[data-maplibre]`)) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = MAPLIBRE_CSS;
-      link.setAttribute("data-maplibre", "");
-      document.head.appendChild(link);
-    }
-    const script = document.createElement("script");
-    script.src = MAPLIBRE_JS;
-    script.async = true;
-    script.onload = () =>
-      window.maplibregl ? resolve(window.maplibregl) : reject(new Error("maplibre missing after load"));
-    script.onerror = () => reject(new Error("failed to load maplibre-gl from CDN"));
-    document.head.appendChild(script);
-
-    // Don't hang forever if the network is blocked.
-    setTimeout(() => reject(new Error("maplibre-gl load timed out")), 12000);
+function createListingMarker(
+  listing: ScoutMapListing,
+  selected: boolean,
+  onListingClick: (listingId: number) => void,
+): HTMLButtonElement {
+  const element = document.createElement("button");
+  const score = listing.feasibilityScore;
+  element.type = "button";
+  element.className = `listing-marker listing-marker-${scoreBand(score)}${selected ? " is-selected" : ""}`;
+  element.textContent = score === null ? "—" : String(score);
+  element.addEventListener("click", (event) => {
+    event.stopPropagation();
+    onListingClick(listing.id);
   });
-  return loaderPromise;
+  return element;
 }
 
 export function ScoutMap({
   marker,
   onPick,
+  listings = [],
+  selectedListingId = null,
+  onListingClick = () => undefined,
+  selectedParcel,
   height = "440px",
 }: {
-  marker: { lat: number; lng: number } | null;
-  onPick: (coord: { lat: number; lng: number }) => void;
+  marker: Coord | null;
+  onPick: (coord: Coord) => void;
+  listings?: ScoutMapListing[];
+  selectedListingId?: number | null;
+  onListingClick?: (listingId: number) => void;
+  selectedParcel?: SelectedParcelGeoJSON | null;
   height?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const coordinateMarkerRef = useRef<Marker | null>(null);
+  const listingMarkersRef = useRef<Marker[]>([]);
   const onPickRef = useRef(onPick);
-  onPickRef.current = onPick;
-
+  const onListingClickRef = useRef(onListingClick);
   const [status, setStatus] = useState<"loading" | "ready" | "unavailable">("loading");
 
-  // Initialise the map once.
+  const selectedListing = useMemo(
+    () => listings.find((listing) => listing.id === selectedListingId) ?? null,
+    [listings, selectedListingId],
+  );
+  const selectedParcelGeometry = useMemo(
+    () => parseSelectedParcelGeoJSON(selectedParcel),
+    [selectedParcel],
+  );
+
+  useEffect(() => { onPickRef.current = onPick; }, [onPick]);
+  useEffect(() => { onListingClickRef.current = onListingClick; }, [onListingClick]);
+
   useEffect(() => {
+    if (!containerRef.current) return;
     let cancelled = false;
-    loadMapLibre()
-      .then((maplibregl) => {
-        if (cancelled || !containerRef.current || mapRef.current) return;
-        const map = new maplibregl.Map({
-          container: containerRef.current,
-          style: DARK_STYLE,
-          center: DEFAULT_CENTER,
-          zoom: 11,
-          attributionControl: true,
-        });
-        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-        map.on("click", (e: any) => {
-          onPickRef.current({ lat: e.lngLat.lat, lng: e.lngLat.lng });
-        });
-        map.on("load", () => !cancelled && setStatus("ready"));
-        mapRef.current = map;
-      })
-      .catch(() => !cancelled && setStatus("unavailable"));
+    let map: MapLibreMap | null = null;
+
+    const markUnavailable = () => {
+      if (cancelled) return;
+      listingMarkersRef.current.forEach((marker) => marker.remove());
+      listingMarkersRef.current = [];
+      coordinateMarkerRef.current?.remove();
+      coordinateMarkerRef.current = null;
+      if (map) {
+        map.remove();
+        map = null;
+        mapRef.current = null;
+      }
+      setStatus("unavailable");
+    };
+
+    try {
+      map = new maplibregl.Map({
+        container: containerRef.current,
+        style: MAP_STYLE,
+        center: DEFAULT_CENTER,
+        zoom: 10.5,
+      });
+      mapRef.current = map;
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+      map.on("click", (event) => onPickRef.current({ lat: event.lngLat.lat, lng: event.lngLat.lng }));
+      map.once("load", () => {
+        if (!cancelled) setStatus("ready");
+      });
+      map.on("error", markUnavailable);
+    } catch {
+      markUnavailable();
+    }
 
     return () => {
       cancelled = true;
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
+      listingMarkersRef.current.forEach((marker) => marker.remove());
+      listingMarkersRef.current = [];
+      coordinateMarkerRef.current?.remove();
+      coordinateMarkerRef.current = null;
+      if (map) map.remove();
+      mapRef.current = null;
     };
   }, []);
 
-  // Sync the marker + recenter when the parent changes the coordinate.
   useEffect(() => {
     const map = mapRef.current;
-    const maplibregl = window.maplibregl;
-    if (!map || !maplibregl || !marker) return;
-    if (markerRef.current) {
-      markerRef.current.setLngLat([marker.lng, marker.lat]);
+    if (!map || status !== "ready") return;
+
+    listingMarkersRef.current.forEach((marker) => marker.remove());
+    listingMarkersRef.current = listings.map((listing) => addAccessibleListingMarker(
+      new maplibregl.Marker({
+        element: createListingMarker(listing, listing.id === selectedListingId, (listingId) => onListingClickRef.current(listingId)),
+        anchor: "center",
+      }).setLngLat([listing.longitude, listing.latitude]),
+      map,
+      listing,
+    ));
+
+    return () => {
+      listingMarkersRef.current.forEach((marker) => marker.remove());
+      listingMarkersRef.current = [];
+    };
+  }, [listings, selectedListingId, status]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || status !== "ready") return;
+    if (!marker) {
+      coordinateMarkerRef.current?.remove();
+      coordinateMarkerRef.current = null;
+      return;
+    }
+    if (coordinateMarkerRef.current) {
+      coordinateMarkerRef.current.setLngLat([marker.lng, marker.lat]);
     } else {
-      markerRef.current = new maplibregl.Marker({ color: "#3b82f6" })
+      const element = document.createElement("span");
+      element.className = "coordinate-marker";
+      element.setAttribute("aria-label", "Selected analysis coordinate");
+      const coordinateMarker = new maplibregl.Marker({ element, anchor: "center" })
         .setLngLat([marker.lng, marker.lat])
         .addTo(map);
+      restoreCoordinateMarkerSemantics(coordinateMarker.getElement());
+      coordinateMarkerRef.current = coordinateMarker;
     }
-    map.flyTo({ center: [marker.lng, marker.lat], zoom: Math.max(map.getZoom(), 14) });
   }, [marker, status]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || status !== "ready" || !selectedListing) return;
+    map.flyTo({
+      center: [selectedListing.longitude, selectedListing.latitude],
+      zoom: Math.max(map.getZoom(), 13.5),
+      essential: false,
+    });
+  }, [selectedListing, status]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || status !== "ready") return;
+    const geometry = selectedParcelGeometry;
+    if (!geometry) return;
+
+    const removeSelectedParcel = () => {
+      if (map.getLayer(SELECTED_PARCEL_LINE)) map.removeLayer(SELECTED_PARCEL_LINE);
+      if (map.getLayer(SELECTED_PARCEL_FILL)) map.removeLayer(SELECTED_PARCEL_FILL);
+      if (map.getSource(SELECTED_PARCEL_SOURCE)) map.removeSource(SELECTED_PARCEL_SOURCE);
+    };
+
+    try {
+      removeSelectedParcel();
+      map.addSource(SELECTED_PARCEL_SOURCE, {
+        type: "geojson",
+        data: { type: "Feature", properties: {}, geometry } as GeoJSON.Feature,
+      });
+      map.addLayer({ id: SELECTED_PARCEL_FILL, type: "fill", source: SELECTED_PARCEL_SOURCE, paint: { "fill-color": "#2f70ef", "fill-opacity": 0.16 } });
+      map.addLayer({ id: SELECTED_PARCEL_LINE, type: "line", source: SELECTED_PARCEL_SOURCE, paint: { "line-color": "#0033a0", "line-width": 3 } });
+    } catch {
+      removeSelectedParcel();
+      return;
+    }
+
+    return () => {
+      if (mapRef.current !== map) return;
+      removeSelectedParcel();
+    };
+  }, [selectedParcelGeometry, status]);
 
   if (status === "unavailable") {
     return (
-      <div
-        style={{ height }}
-        className="rounded-panel border border-border bg-bg-surface flex items-center justify-center text-center p-6"
-      >
-        <p className="text-text-muted font-mono text-xs leading-relaxed">
-          Map unavailable (could not load MapLibre).<br />
-          Enter coordinates manually to run the analysis.
-        </p>
+      <div className="map-fallback" style={{ height }} role="status">
+        <span className="material-symbols-rounded" aria-hidden="true">map</span>
+        <strong>Map temporarily unavailable</strong>
+        <p>Search and lead cards still work. Enter coordinates below to run parcel analysis.</p>
       </div>
     );
   }
 
   return (
-    <div className="relative rounded-panel overflow-hidden border border-border" style={{ height }}>
-      <div ref={containerRef} className="absolute inset-0" />
-      {status === "loading" && (
-        <div className="absolute inset-0 flex items-center justify-center bg-bg-surface/80">
-          <p className="text-text-muted font-mono text-xs">Loading map…</p>
-        </div>
-      )}
+    <div className="scout-map-shell" style={{ height }} data-selected-parcel={selectedParcelGeometry ? "true" : undefined}>
+      <div ref={containerRef} className="scout-map-canvas" role="region" aria-label={selectedParcelGeometry ? "Selected parcel boundary map" : "Persisted Gauteng listing map"} />
+      <div className="floating-lead-chip">
+        <span className="material-symbols-rounded" aria-hidden="true">location_city</span>
+        {selectedListing?.address || selectedListing?.suburb || (selectedParcelGeometry ? "Selected parcel" : `${listings.length} mapped leads`)}
+      </div>
+      <div className="map-legend" aria-label="Map legend">
+        {selectedParcelGeometry ? <span><i className="legend-selected-parcel" />Selected parcel</span> : <>
+          <span><i className="legend-score-high" />Score ≥ 80</span>
+          <span><i className="legend-score-review" />Score &lt; 80</span>
+          <span><b>RES</b>Zone</span>
+          <span><i className="legend-dolomite" />Dolomite</span>
+        </>}
+      </div>
+      {status === "loading" && <div className="scout-map-loading" role="status">Loading map…</div>}
     </div>
   );
 }

@@ -11,41 +11,76 @@ is unavailable, so feasibility results never break on a transient DB outage.
 The constants here MUST mirror scripts/seed/seed_tariffs.ts for TARIFF_YEAR=2026
 so behaviour is identical before and after migrating to the DB.
 """
+
 from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 log = logging.getLogger("fgp.tariffs")
 
+FALLBACK_TARIFF_YEAR = 2026
+UNIT_TYPES = {"bachelor", "1bed", "2bed", "luxury"}
+MUNICIPALITIES = {"johannesburg", "tshwane", "ekurhuleni"}
+REQUIRED_CATEGORIES = {
+    "build_rates",
+    "unit_sizes",
+    "market_rents",
+    "bulk_contributions",
+    "transfer_duty_brackets",
+    "fees",
+}
+
+
+class TariffValidationError(ValueError):
+    pass
+
+
 # --- Fallback constants (mirror the 2026 DB seed) --------------------------------
-BUILD_RATES_2026: dict[str, int] = {
+BUILD_RATES_2026: dict[str, float] = {
     "bachelor": 13_500,
     "1bed": 14_200,
     "2bed": 15_000,
     "luxury": 18_500,
 }
 
-UNIT_SIZES: dict[str, int] = {
+UNIT_SIZES: dict[str, float] = {
     "bachelor": 35,
     "1bed": 55,
     "2bed": 85,
+    "luxury": 120,
 }
 
 # Flat {unit_type: monthly_rent}. The legacy calculations module nested these
 # under a "default" key; the DB stores them flat, so this is the canonical shape.
-MARKET_RENT_2026: dict[str, int] = {
+MARKET_RENT_2026: dict[str, float] = {
     "bachelor": 4_500,
     "1bed": 6_500,
     "2bed": 9_500,
+    "luxury": 18_000,
 }
 
 BULK_RATES_2026: dict[str, dict[str, tuple[float, float]]] = {
-    "johannesburg": {"bachelor": (45_000, 65_000), "1bed": (50_000, 65_000), "2bed": (55_000, 65_000)},
-    "tshwane": {"bachelor": (38_000, 55_000), "1bed": (42_000, 55_000), "2bed": (46_000, 55_000)},
-    "ekurhuleni": {"bachelor": (40_000, 58_000), "1bed": (44_000, 58_000), "2bed": (48_000, 58_000)},
+    "johannesburg": {
+        "bachelor": (45_000, 65_000),
+        "1bed": (50_000, 65_000),
+        "2bed": (55_000, 65_000),
+        "luxury": (65_000, 80_000),
+    },
+    "tshwane": {
+        "bachelor": (38_000, 55_000),
+        "1bed": (42_000, 55_000),
+        "2bed": (46_000, 55_000),
+        "luxury": (55_000, 70_000),
+    },
+    "ekurhuleni": {
+        "bachelor": (40_000, 58_000),
+        "1bed": (44_000, 58_000),
+        "2bed": (48_000, 58_000),
+        "luxury": (58_000, 73_000),
+    },
 }
 
 # (upper_threshold, rate, cumulative_base); inf upper = top (no-bound) bracket.
@@ -64,9 +99,9 @@ PROFESSIONAL_FEE_PCT = 0.12
 @dataclass(frozen=True)
 class Tariffs:
     year: int
-    build_rates: dict[str, int]
-    unit_sizes: dict[str, int]
-    market_rents: dict[str, int]
+    build_rates: dict[str, float]
+    unit_sizes: dict[str, float]
+    market_rents: dict[str, float]
     bulk_contributions: dict[str, dict[str, tuple[float, float]]]
     transfer_duty_brackets: list[tuple[float, float, float]]
     professional_fee_pct: float
@@ -75,6 +110,8 @@ class Tariffs:
 
 def default_tariffs(year: int = 2026) -> Tariffs:
     """The hardcoded 2026 baseline, used when the DB is unavailable."""
+    if year != FALLBACK_TARIFF_YEAR:
+        raise TariffValidationError("hard-coded tariff fallback is available only for 2026")
     return Tariffs(
         year=year,
         build_rates=dict(BUILD_RATES_2026),
@@ -97,22 +134,73 @@ def _parse_brackets(raw: Any) -> list[tuple[float, float, float]]:
         out.append((upper_f, float(rate), float(base)))
     if not out:
         raise ValueError("empty transfer_duty_brackets")
+    previous_upper = float("-inf")
+    previous_base = float("-inf")
+    for index, (upper, rate, base) in enumerate(out):
+        if rate < 0 or rate > 1 or base < previous_base:
+            raise ValueError("invalid transfer_duty_brackets ordering")
+        if upper == float("inf") and index != len(out) - 1:
+            raise ValueError("only final transfer duty bracket may be unbounded")
+        if upper != float("inf") and upper <= previous_upper:
+            raise ValueError("transfer duty upper bounds must be strictly increasing")
+        previous_upper = upper
+        previous_base = base
+    if out[-1][0] != float("inf"):
+        raise ValueError("final transfer duty bracket must be unbounded")
     return out
 
 
 def _parse_bulk(raw: Any) -> dict[str, dict[str, tuple[float, float]]]:
-    return {
+    parsed = {
         muni: {ut: (float(pair[0]), float(pair[1])) for ut, pair in zones.items()}
         for muni, zones in raw.items()
     }
+    if set(parsed) != MUNICIPALITIES:
+        raise ValueError("bulk contributions require all supported municipalities")
+    for rates in parsed.values():
+        if set(rates) != UNIT_TYPES:
+            raise ValueError("bulk contributions require all supported unit types")
+        if any(low <= 0 or high <= 0 or low > high for low, high in rates.values()):
+            raise ValueError("bulk contribution ranges must be positive and ordered")
+    return parsed
+
+
+def _parse_unit_values(raw: Any) -> dict[str, float]:
+    parsed = {key: float(value) for key, value in raw.items()}
+    if set(parsed) != UNIT_TYPES or any(value <= 0 for value in parsed.values()):
+        raise ValueError("tariff category requires positive values for all supported unit types")
+    return parsed
 
 
 def tariffs_from_rows(year: int, rows: dict[str, Any]) -> Tariffs:
     """Build a Tariffs bundle from a {category: data} mapping (e.g. DB rows).
 
-    Each category is parsed defensively: a missing or malformed category falls
-    back to the corresponding 2026 constant rather than failing the whole load.
+    The 2026 bundle may fall back category-by-category to its matching hard-coded
+    baseline. Every other year must provide a complete, valid database bundle.
     """
+    if year != FALLBACK_TARIFF_YEAR:
+        missing = REQUIRED_CATEGORIES - rows.keys()
+        if missing:
+            raise TariffValidationError(
+                f"tariff bundle for {year} is incomplete: missing {', '.join(sorted(missing))}"
+            )
+        try:
+            fee = float(rows["fees"]["professional_fee_pct"])
+            if fee <= 0 or fee > 0.3:
+                raise ValueError("professional fee percentage is out of range")
+            return Tariffs(
+                year=year,
+                build_rates=_parse_unit_values(rows["build_rates"]),
+                unit_sizes=_parse_unit_values(rows["unit_sizes"]),
+                market_rents=_parse_unit_values(rows["market_rents"]),
+                bulk_contributions=_parse_bulk(rows["bulk_contributions"]),
+                transfer_duty_brackets=_parse_brackets(rows["transfer_duty_brackets"]),
+                professional_fee_pct=fee,
+                source="db",
+            )
+        except (ValueError, TypeError, AttributeError, KeyError, IndexError) as error:
+            raise TariffValidationError(f"tariff bundle for {year} is invalid: {error}") from error
+
     base = default_tariffs(year)
     build_rates = base.build_rates
     unit_sizes = base.unit_sizes
@@ -123,22 +211,29 @@ def tariffs_from_rows(year: int, rows: dict[str, Any]) -> Tariffs:
 
     if "build_rates" in rows:
         try:
-            build_rates = {k: int(v) for k, v in rows["build_rates"].items()}
+            build_rates = _parse_unit_values(rows["build_rates"])
         except (ValueError, TypeError, AttributeError) as e:
             log.warning("bad build_rates tariff row, using fallback: %s", e)
     if "unit_sizes" in rows:
         try:
-            unit_sizes = {k: int(v) for k, v in rows["unit_sizes"].items()}
+            unit_sizes = _parse_unit_values(rows["unit_sizes"])
         except (ValueError, TypeError, AttributeError) as e:
             log.warning("bad unit_sizes tariff row, using fallback: %s", e)
     if "market_rents" in rows:
         try:
-            market_rents = {k: int(v) for k, v in rows["market_rents"].items()}
+            market_rents = _parse_unit_values(rows["market_rents"])
         except (ValueError, TypeError, AttributeError) as e:
             log.warning("bad market_rents tariff row, using fallback: %s", e)
     if "bulk_contributions" in rows:
         try:
-            bulk = _parse_bulk(rows["bulk_contributions"])
+            parsed_bulk = _parse_bulk(rows["bulk_contributions"])
+            bulk = {
+                municipality: {
+                    **rates,
+                    **parsed_bulk.get(municipality, {}),
+                }
+                for municipality, rates in base.bulk_contributions.items()
+            }
         except (ValueError, TypeError, AttributeError, IndexError) as e:
             log.warning("bad bulk_contributions tariff row, using fallback: %s", e)
     if "transfer_duty_brackets" in rows:
@@ -186,9 +281,13 @@ def load_tariffs(year: int = 2026, *, use_cache: bool = True) -> Tariffs:
 
         rows = fetch_tariff_rows(year)
     except Exception as e:  # noqa: BLE001 — fallback path must catch everything
+        if year != FALLBACK_TARIFF_YEAR:
+            raise TariffValidationError(f"tariff bundle for {year} is unavailable") from e
         log.warning("tariff DB load failed for %s, using fallback constants: %s", year, e)
         return default_tariffs(year)
 
+    if not rows and year != FALLBACK_TARIFF_YEAR:
+        raise TariffValidationError(f"tariff bundle for {year} is unavailable")
     result = tariffs_from_rows(year, rows) if rows else default_tariffs(year)
     if use_cache:
         _cache[year] = (now, result)

@@ -2,6 +2,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { actorHeaders } from "@/lib/portal-client";
 
 const schema = z.object({
   weekOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -26,7 +27,7 @@ export function CheckInModal({ projectId, onClose }: { projectId: number; onClos
   async function onSubmit(values: FormValues) {
     await fetch(`/api/projects/${projectId}/checkins`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: actorHeaders(),
       body: JSON.stringify(values),
     });
     onClose();
@@ -85,7 +86,7 @@ export function CheckInModal({ projectId, onClose }: { projectId: number; onClos
           <button
             type="submit"
             disabled={isSubmitting}
-            className="bg-accent-blue text-white font-mono text-sm font-semibold py-2.5 rounded-card transition-colors disabled:opacity-50 hover:opacity-90"
+            className="bg-accent-blue text-white font-mono text-sm font-semibold py-2.5 rounded-card portal-transition disabled:opacity-50 hover:opacity-90"
           >
             {isSubmitting ? "Saving..." : "Save check-in"}
           </button>

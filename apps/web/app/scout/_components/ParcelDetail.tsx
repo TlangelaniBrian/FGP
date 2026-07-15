@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import type { ParcelAnalysis } from "@/lib/parcel";
 
 const DOLOMITE_COLORS: Record<string, string> = {
@@ -19,7 +20,7 @@ function ScoreBar({ label, value }: { label: string; value: number | null | unde
       </div>
       <div className="h-1.5 rounded-pill bg-border overflow-hidden">
         <div
-          className="h-full bg-accent-blue rounded-pill transition-all"
+          className="portal-transition h-full bg-accent-blue rounded-pill"
           style={{ width: `${v == null ? 0 : Math.max(0, Math.min(100, v))}%` }}
         />
       </div>
@@ -71,7 +72,7 @@ export function ParcelDetail({ data }: { data: ParcelAnalysis }) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="portal-grid-4" style={{ gap: 8 }}>
         <Stat label="Erf size" value={num(data.size_sqm, " m²")} />
         <Stat label="Coverage" value={data.coverage_pct == null ? "—" : `${data.coverage_pct}%`} />
         <Stat label="FAR" value={data.far == null ? "—" : String(data.far)} />
@@ -96,7 +97,7 @@ export function ParcelDetail({ data }: { data: ParcelAnalysis }) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="portal-grid-4" style={{ gap: 12 }}>
         <ScoreBar label="Schools" value={data.score_schools} />
         <ScoreBar label="Transport" value={data.score_transport} />
         <ScoreBar label="Amenities" value={data.score_amenities} />
@@ -132,6 +133,7 @@ export function ParcelDetail({ data }: { data: ParcelAnalysis }) {
           </div>
         </div>
       )}
+      <div className="split" style={{ paddingTop: 3 }}><Link className="button button-secondary" href="/evaluate">Evaluate this parcel →</Link><Link className="button button-quiet" href="/scout">Back to Scout pipeline</Link></div>
     </div>
   );
 }
