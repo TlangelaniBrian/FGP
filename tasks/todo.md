@@ -91,6 +91,15 @@
 - [x] Remove residual generic transitions and button hover translation while preserving the existing entry and reduced-motion contract.
 - [x] Run the complete Task 5D verification matrix and self-review the authorized visual-only diff.
 
+## Task 7 Settings and Tariffs controls (2026-07-15)
+
+- [x] Inspect the approved handoff, current routes, persisted schemas, and role capabilities.
+- [x] Record a test-first implementation plan for strict Settings and field-based Tariff controls.
+- [ ] Implement and independently review complete persisted notification, scraper, and auto-analysis settings.
+- [ ] Implement and independently review field-based editors for all six trusted tariff categories.
+- [ ] Verify Owner, Chairperson, Treasurer, Analyst, and Viewer behavior in authenticated API and browser matrices.
+- [ ] Run the whole Task 7 review and close the completion-audit item only when approved.
+
 ## Review
 
 Implemented the shared Capitec-style shell, route-aware navigation, visual
