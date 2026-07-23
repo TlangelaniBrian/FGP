@@ -33,7 +33,8 @@
 | `apps/api/src/FGP.Api/Projects/*`, `Tariffs/*`, `Feasibility/*`, `Spatial/*` | replacement contracts for existing routes. |
 | `apps/api/src/FGP.Api/CapitalFund/*` | new governance module, separate from parity route migration. |
 | `apps/api/tests/FGP.Api.Tests/*` | API integration and governance tests against PostGIS. |
-| `apps/web/next.config.ts` | same-origin reverse proxy to the API. |
+| `apps/web/app/(auth)/*` and `apps/web/lib/session.ts` | sign-in, registration, verification, invitation acceptance, session bootstrap, and capability-aware UI state. |
+| `apps/web/next.config.ts` | `afterFiles` same-origin reverse proxy to the API. |
 | `apps/web/app/api/**` | removed one module at a time after replacement contract passes. |
 | `infra/docker-compose.yml` | local API and test dependencies. |
 | `scripts/migration/*` | read-only classification, deterministic seed and approved import commands. |
@@ -76,7 +77,7 @@ Run: `dotnet test apps/api/tests/FGP.Api.Tests/FGP.Api.Tests.csproj --filter Ful
 
 Expected: failure indicating the solution/project cannot be found.
 
-- [ ] **Step 3: Create the solution and minimal host.** Target SDK `10.0.100` in `global.json`; use `WebApplication.CreateBuilder`, `app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")))`, and `app.Run()`. Add a Docker Compose `api` service that waits for PostGIS and worker health checks.
+- [ ] **Step 3: Create the solution and minimal host.** Target SDK `10.0.100` in `global.json`; use `WebApplication.CreateBuilder`, `app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")))`, and `app.Run()`. Add a Docker Compose `api` service that waits for PostGIS and worker health checks. Add a Mailpit service exposing SMTP on `1025` and its local inbox on `8025`; configure the API with `Email__SmtpHost=mailpit`, but do not make API health depend on Mailpit or Redis.
 
 - [ ] **Step 4: Run the focused test and `docker compose -f infra/docker-compose.yml config`.**
 
@@ -125,7 +126,7 @@ Run: `dotnet test apps/api/tests/FGP.Api.Tests/FGP.Api.Tests.csproj --filter Ful
 
 Expected: failure before the context and first migration exist.
 
-- [ ] **Step 3: Implement entities and migration.** Translate `supabase/migrations/0001_initial.sql` through `0005_spatial_sample_data.sql` to EF entities and migration SQL where EF cannot express extensions, generated values, GIST indexes, or geography types. Configure `UseNpgsql(..., o => o.UseNetTopologySuite())`; call `migrationBuilder.Sql("CREATE EXTENSION IF NOT EXISTS postgis")` in the first migration. Do not copy `auth.uid()` policies.
+- [ ] **Step 3: Implement entities and migration.** Translate DDL from `supabase/migrations/0001_initial.sql` through `0004_checkin_deposits.sql` to EF entities and migration SQL where EF cannot express extensions, generated values, GIST indexes, or geography types. Configure `UseNpgsql(..., o => o.UseNetTopologySuite())`; call `migrationBuilder.Sql("CREATE EXTENSION IF NOT EXISTS postgis")` in the first migration. Do not copy `auth.uid()` policies. Do not include the `0005_spatial_sample_data.sql` INSERTs in an EF migration; Task 9 moves them to deterministic demo seeding.
 
 - [ ] **Step 4: Add the source classifier.** Make `scripts/migration/classify-source.sh` require `SOURCE_DATABASE_URL`, query only aggregate counts and linkage/null statistics, and write `artifacts/source-classification.json`. Exit non-zero unless called with `--acknowledge-read-only`.
 
@@ -153,10 +154,10 @@ git commit -m "feat: add portable postgis schema migrations"
 - Create: `apps/api/tests/FGP.Api.Tests/OrganizationIsolationTests.cs`
 
 **Interfaces:**
-- Produces cookie-authenticated `POST /api/auth/register`, `/sign-in`, `/sign-out`, and organisation membership endpoints.
+- Produces cookie-authenticated `POST /api/auth/register`, `/verify-email`, `/sign-in`, `/sign-out`, `/password-recovery`, `/password-reset`, `GET /api/auth/session`, and organisation membership/invitation endpoints.
 - Produces `RequireCapability(string capability)` for `ManageTeam`, `EditTariffs`, `RecordContribution`, `CoSignFinancial`, `CoSignOperational`, `ProposeFundGoal`, and `ProposeCorrection`.
 
-- [ ] **Step 1: Write failing authorisation tests.**
+- [ ] **Step 1: Write failing authorisation and account-lifecycle tests.** Assert registration emits a confirmation message through `IEmailSender`, an unverified account receives a stable `EmailUnverified` sign-in error, a verified account receives the secure session cookie, and a password-reset token is single-use. Include capability-policy cases:
 
 ```csharp
 [Theory]
@@ -173,7 +174,7 @@ Run: `dotnet test apps/api/tests/FGP.Api.Tests/FGP.Api.Tests.csproj --filter Ful
 
 Expected: failure before capability policies and memberships are implemented.
 
-- [ ] **Step 3: Implement ASP.NET Identity and memberships.** Use `ApplicationUser : IdentityUser<Guid>` and a unique `(organization_id, user_id)` membership. Create the Founder as Owner during organisation creation. Enforce exactly one active Owner and at most one active Chairperson transactionally; require ownership transfer before Owner demotion/removal. Derive current organisation and role claims server-side from the authenticated membership.
+- [ ] **Step 3: Implement ASP.NET Identity, email, and memberships.** Use `ApplicationUser : IdentityUser<Guid>` and a unique `(organization_id, user_id)` membership. Create the Founder as Owner during organisation creation. Enforce exactly one active Owner and at most one active Chairperson transactionally; require ownership transfer before Owner demotion/removal. Implement an `IEmailSender` backed by the Task 1 Mailpit SMTP configuration in development; verification and password-reset URLs carry single-use, time-limited Identity tokens. Derive current organisation and role claims server-side from the authenticated membership.
 
 - [ ] **Step 4: Add authenticated integration tests for cross-organisation reads and writes.** A user in organisation A must receive `404` for A-scoped resources requested with an ID belonging to organisation B, not a tenant-existence leak.
 
@@ -190,7 +191,68 @@ git add apps/api
 git commit -m "feat: add organisation identity and policies"
 ```
 
-### Task 4: Move the web transport to the same-origin API proxy
+### Task 4: Build the authenticated web user journey and capability-aware screens
+
+**Files:**
+- Create: `apps/web/app/(auth)/sign-in/page.tsx`
+- Create: `apps/web/app/(auth)/register/page.tsx`
+- Create: `apps/web/app/(auth)/verify-email/page.tsx`
+- Create: `apps/web/app/(auth)/password-recovery/page.tsx`
+- Create: `apps/web/app/(auth)/password-reset/page.tsx`
+- Create: `apps/web/app/invitations/[token]/page.tsx`
+- Create: `apps/web/lib/session.ts`
+- Create: `apps/web/lib/session-context.tsx`
+- Create: `apps/web/app/_components/RequireSession.tsx`
+- Modify: `apps/web/app/layout.tsx`
+- Modify: `apps/web/app/_components/Sidebar.tsx`
+- Modify: `apps/web/app/page.tsx`
+- Modify: `apps/web/app/projects/page.tsx`
+- Modify: `apps/web/app/settings/page.tsx`
+- Modify: `apps/web/next.config.ts`
+- Modify: `apps/web/package.json`
+- Modify: `pnpm-lock.yaml`
+- Create: `apps/web/lib/session.test.ts`
+
+**Interfaces:**
+- Consumes `GET /api/auth/session`, registration, verification, password, invitation, and organisation endpoints from Task 3.
+- Produces `SessionContext` with `user`, `activeOrganization`, and `capabilities`; unauthenticated protected pages redirect to `/sign-in?returnTo=<relative-path>`.
+
+- [ ] **Step 1: Write failing session and redirect tests.**
+
+```ts
+it("redirects an unauthenticated user to sign-in with a relative return path", async () => {
+  render(<RequireSession><ProjectsPage /></RequireSession>);
+  expect(await screen.findByRole("link", { name: /sign in/i })).toHaveAttribute("href", "/sign-in?returnTo=%2Fprojects");
+});
+
+it("hides tariff editing when the session lacks EditTariffs", () => {
+  render(<TariffActions capabilities={[]} />);
+  expect(screen.queryByRole("button", { name: /save tariffs/i })).not.toBeInTheDocument();
+});
+```
+
+- [ ] **Step 2: Run tests and confirm they fail.**
+
+Run: `pnpm --filter web test -- session.test.ts`
+
+Expected: failure because no session context, auth pages, or protected-page wrapper exists.
+
+- [ ] **Step 3: Implement the complete user journey and its initial same-origin transport.** Add `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, and a `test` script to `apps/web/package.json`. Configure the `/api/:path*` proxy as an `afterFiles` rewrite to `${API_INTERNAL_ORIGIN}/api/:path*`; filesystem route handlers must win until their own migration task deletes them, and a `beforeFiles` rewrite is prohibited. Add forms for registration, sign-in, verification resend/complete, password recovery/reset, organisation creation, and invitation acceptance. `SessionProvider` fetches `/api/auth/session` through a local, cookie-only `sessionFetch` helper, retains no token in local storage, and exposes server-issued capabilities. Wrap protected dashboard, projects, and settings routes in `RequireSession`; use capabilities only to show or hide controls, never as the authorisation boundary.
+
+- [ ] **Step 4: Run the focused tests, typecheck, and an end-to-end browser flow against Mailpit.**
+
+Run: `pnpm --filter web test -- session.test.ts && pnpm --filter web typecheck && pnpm --filter web build`
+
+Expected: a registered user receives a verification email in Mailpit, verifies, signs in, creates or accepts an organisation, and reaches the requested protected page; a Viewer never sees protected edit actions.
+
+- [ ] **Step 5: Commit.**
+
+```bash
+git add apps/web
+git commit -m "feat: add authenticated organisation user journey"
+```
+
+### Task 5: Move the web transport to the same-origin API proxy
 
 **Files:**
 - Modify: `apps/web/next.config.ts`
@@ -221,7 +283,7 @@ Run: `pnpm --filter web test -- api-client.test.ts`
 
 Expected: failure because the shared API client does not exist.
 
-- [ ] **Step 3: Add the rewrite, client, and test runner.** Add `vitest` and a `test` script to `apps/web/package.json`. In `next.config.ts`, rewrite `/api/:path*` to `${API_INTERNAL_ORIGIN}/api/:path*`; keep each legacy Next route only until its corresponding API endpoint passes Task 5–7 contract tests. Centralise fetch/error parsing in `lib/api-client.ts`; remove unused Supabase libraries and dependencies only after no imports remain.
+- [ ] **Step 3: Generalise the existing proxy into the shared client.** Preserve the Task 4 `afterFiles` rewrite; filesystem route handlers must win until their own task deletes them, and a `beforeFiles` rewrite is prohibited. Centralise fetch/error parsing in `lib/api-client.ts`, migrate `sessionFetch` to it, and remove unused Supabase libraries and dependencies only after no imports remain.
 
 - [ ] **Step 4: Run the focused test, web typecheck, and build.**
 
@@ -236,7 +298,7 @@ git add apps/web
 git commit -m "feat: route web requests through api gateway"
 ```
 
-### Task 5: Preserve parcel and feasibility behaviour through the private worker gateway
+### Task 6: Preserve parcel and feasibility behaviour through the private worker gateway
 
 **Files:**
 - Create: `apps/api/src/FGP.Api/Spatial/WorkerClient.cs`
@@ -245,9 +307,9 @@ git commit -m "feat: route web requests through api gateway"
 - Create: `apps/api/src/FGP.Api/Feasibility/FeasibilityRepository.cs`
 - Create: `apps/api/tests/FGP.Api.Tests/ParcelContractTests.cs`
 - Create: `apps/api/tests/FGP.Api.Tests/FeasibilityContractTests.cs`
-- Modify: `apps/web/app/api/parcel/route.ts`
-- Modify: `apps/web/app/api/feasibility/route.ts`
-- Modify: `apps/web/app/api/feasibility/save/route.ts`
+- Delete: `apps/web/app/api/parcel/route.ts`
+- Delete: `apps/web/app/api/feasibility/route.ts`
+- Delete: `apps/web/app/api/feasibility/save/route.ts`
 
 **Interfaces:**
 - Produces authenticated `POST /api/parcel`, `POST /api/feasibility`, and `POST /api/feasibility/save` with the current JSON request/response shapes.
@@ -278,7 +340,7 @@ git add apps/api apps/web
 git commit -m "feat: proxy parcel and feasibility through .net api"
 ```
 
-### Task 6: Migrate projects, check-ins, and tariffs one bounded route group at a time
+### Task 7: Migrate projects, check-ins, and tariffs one bounded route group at a time
 
 **Files:**
 - Create: `apps/api/src/FGP.Api/Projects/ProjectEndpoints.cs`
@@ -294,7 +356,7 @@ git commit -m "feat: proxy parcel and feasibility through .net api"
 
 **Interfaces:**
 - Produces organisation-scoped replacements for every deleted route with compatible pagination and response fields.
-- Requires `EditTariffs` for tariff writes, `RecordContribution` only for contribution-related commands, and role-appropriate project permissions for project mutations.
+- Requires `EditTariffs` for tariff writes and role-appropriate project permissions for project mutations.
 
 - [ ] **Step 1: Write failing endpoint tests for each route group.** Include pagination bounds (`limit` 1–200), project not-found versus cross-organisation non-disclosure, check-in creation, tariff read, and forbidden tariff update by Viewer/Analyst.
 
@@ -320,7 +382,7 @@ git add apps/api apps/web && git commit -m "feat: migrate checkin api route"
 git add apps/api apps/web && git commit -m "feat: migrate tariff api routes"
 ```
 
-### Task 7: Build Capital Fund governance as a new, independently tested module
+### Task 8: Build Capital Fund governance as a new, independently tested module
 
 **Files:**
 - Create: `apps/api/src/FGP.Api/CapitalFund/Contribution.cs`
@@ -333,10 +395,10 @@ git add apps/api apps/web && git commit -m "feat: migrate tariff api routes"
 - Create: `apps/api/tests/FGP.Api.Tests/FundGoalGovernanceTests.cs`
 
 **Interfaces:**
-- Produces `POST /api/capital-fund/corrections`, correction approval endpoints, fund-goal submission/approval/withdrawal endpoints, and immutable audit records.
-- Produces `GovernanceService.ProposeCorrectionAsync`, `ApproveCorrectionAsync`, `ProposeFundGoalAsync`, `ApproveFundGoalAsync`, `VoidOpenGoalsForMembershipChangeAsync`, and `WithdrawFundGoalAsync`.
+- Produces `POST /api/capital-fund/contributions`, correction proposal/approval endpoints, fund-goal submission/approval/withdrawal endpoints, and immutable audit records.
+- Produces `GovernanceService.RecordContributionAsync`, `ProposeCorrectionAsync`, `ApproveCorrectionAsync`, `ProposeFundGoalAsync`, `ApproveFundGoalAsync`, `VoidOpenGoalsForMembershipChangeAsync`, and `WithdrawFundGoalAsync`.
 
-- [ ] **Step 1: Write the failing correction matrix tests.** Cover Owner/Chairperson/Treasurer proposer cases, Owner/Chairperson subjects, exclusion of proposer and subject, no Treasurer/Analyst approval, missing-governor precondition, and zero eligible approvers conflict response.
+- [ ] **Step 1: Write failing contribution and correction matrix tests.** Assert `RecordContribution` permits Owner, Chairperson, Treasurer, and Analyst and rejects Viewer. Cover Owner/Chairperson/Treasurer correction proposer cases, Owner/Chairperson subjects, exclusion of proposer and subject, no Treasurer/Analyst approval, missing-governor precondition, and zero eligible approvers conflict response. Include an Owner-subject case where that Owner attempts approval and is rejected solely by the subject conflict exclusion, while the eligible Chairperson can approve; this isolates the conflict rule from missing-capability behaviour.
 
 ```csharp
 [Fact]
@@ -373,17 +435,23 @@ git add apps/api
 git commit -m "feat: add capital fund governance"
 ```
 
-### Task 8: Finalise deterministic data handling, Supabase removal, and CI gate
+### Task 9: Finalise deterministic data handling, Supabase removal, and CI gate
 
 **Files:**
 - Create: `scripts/migration/import-approved-source.sh`
 - Create: `scripts/migration/seed-demo-data.sh`
 - Create: `scripts/migration/verify-import.sh`
+- Create: `apps/api/src/FGP.Api/Data/Seed/ReferenceDataSeeder.cs`
+- Create: `apps/api/src/FGP.Api/Data/Seed/DemoSpatialDataSeeder.cs`
 - Create: `.github/workflows/verify.yml`
 - Modify: `README.md`
+- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
+- Modify: `memory/MEMORY.md`
 - Modify: `.env.example`
 - Modify: `package.json`
 - Modify: `apps/web/package.json`
+- Modify: `pnpm-lock.yaml`
 - Delete: `supabase/config.toml`
 - Delete: `supabase/migrations/0001_initial.sql`
 - Delete: `supabase/migrations/0002_projects_extended.sql`
@@ -394,6 +462,10 @@ git commit -m "feat: add capital fund governance"
 - Delete: `packages/database/index.ts`
 - Delete: `packages/database/schema.ts`
 - Delete: `packages/database/package.json`
+- Delete: `packages/database/tsconfig.json`
+- Delete: `scripts/seed/seed_zoning_rules.ts`
+- Delete: `scripts/seed/seed_tariffs.ts`
+- Delete: `scripts/seed/seed_soshanguve.ts`
 
 **Interfaces:**
 - Produces source-specific import manifests and verification reports; import fails unless an approved source classification file is supplied.
@@ -407,11 +479,11 @@ Run: `scripts/migration/verify-import.sh artifacts/source-classification.json &&
 
 Expected: verification/scans fail before the approved import path and cleanup are complete.
 
-- [ ] **Step 3: Implement the mutually exclusive data paths.** `import-approved-source.sh` requires `--classification production` and an approved mapping manifest; it exports/imports only after confirmation and writes counts/checksums. `seed-demo-data.sh` requires `--classification demo`, uses deterministic data, and never connects to a production URL. Do not execute either path until the owner classifies the source snapshot.
+- [ ] **Step 3: Implement the mutually exclusive data paths and replace TypeScript seeders.** `import-approved-source.sh` requires `--classification production` and an approved mapping manifest; it exports/imports only after confirmation and writes counts/checksums. `seed-demo-data.sh` requires `--classification demo`, uses deterministic data, and never connects to a production URL. Move the `0005_spatial_sample_data.sql` inserts into `DemoSpatialDataSeeder`, port the curated zoning-rule and tariff rows from `scripts/seed/seed_zoning_rules.ts` and `seed_tariffs.ts` into `ReferenceDataSeeder`, and delete `seed_soshanguve.ts` rather than migrate its personal demo project. Remove all `seed:*` scripts and the `tsx` development dependency from the root `package.json`. Do not execute either path until the owner classifies the source snapshot.
 
 - [ ] **Step 4: Remove Supabase and Drizzle only after every route group and verification report passes.** Remove package dependencies, CLI documentation, runtime environment variables, and migrations; preserve no compatibility fallback. Replace README with .NET API, PostGIS, worker, test, backup-restore, and local mail-sink instructions.
 
-- [ ] **Step 5: Add and exercise CI locally.** Use `act` only if already available; otherwise run the exact commands from the workflow locally. Required commands are `pnpm lint`, `pnpm typecheck`, `pnpm build`, `dotnet test`, `(cd apps/worker && uv run pytest)`, and a clean PostGIS migration test.
+- [ ] **Step 5: Add and exercise CI locally, then require it in GitHub.** Use `act` only if already available; otherwise run the exact commands from the workflow locally. Required commands are `pnpm lint`, `pnpm typecheck`, `pnpm build`, `dotnet test`, `(cd apps/worker && uv run pytest)`, and a clean PostGIS migration test. With explicit repository-admin approval, configure the repository’s branch protection or ruleset so the `verify` workflow is a required status check; record the ruleset URL and required check name in `README.md` because YAML alone cannot enforce it.
 
 - [ ] **Step 6: Perform final no-Supabase and rollback verification.** Confirm no Supabase runtime/config/dependency remains, restore a disposable database from the timestamped export, switch one route mapping back to the retained legacy implementation in a test environment, and verify the old route still serves the pre-cutover contract.
 
@@ -424,6 +496,6 @@ git commit -m "feat: complete supabase migration"
 
 ## Plan self-review
 
-- **Spec coverage:** Tasks 1–3 implement platform identity, tenancy, and schema ownership; Tasks 4–6 migrate every existing public route; Task 7 implements the new Capital Fund governance module; Task 8 enforces source classification, removal, rollback evidence, CI, and documentation. Python worker preservation, 10-second timing, Redis ownership, and no-deployment boundaries are global constraints and verified in Tasks 1, 5, and 8.
+- **Spec coverage:** Tasks 1–3 implement platform identity, tenancy, schema ownership, and local email delivery; Task 4 provides the authentication and capability-aware UI required to use protected routes; Tasks 5–7 migrate every existing public route; Task 8 implements the new Capital Fund governance module; Task 9 enforces source classification, removal, rollback evidence, CI, seed replacement, and documentation. Python worker preservation, 10-second timing, Redis ownership, and no-deployment boundaries are global constraints and verified in Tasks 1, 6, and 9.
 - **Deliberate gates:** The plan contains no command that imports current Supabase data, provisions Azure, deploys containers, or configures a production email/object-store provider. Source classification and deployment approval remain external gates.
 - **Consistency:** `AssentBySubmission` is limited to fund goals; correction approval requires a distinct eligible Owner/Chairperson. The Chairperson can submit fund goals and corrections, but cannot self-approve a correction.
