@@ -1,6 +1,6 @@
 # FGP Supabase-to-.NET Migration Design
 
-**Version:** 0.2
+**Version:** 0.3
 
 **Status:** Revised design; pending re-approval before implementation. Cloud deployment requires separate approval.
 
@@ -37,14 +37,16 @@ ASP.NET Core API (.NET 10 LTS)
   `- Private spatial gateway
               |
               v
-       FastAPI worker (temporary)
-       parcel analysis and feasibility calculation
+       FastAPI processing worker
+       spatial analysis, feasibility, PDFs, and scrapers
 
 ASP.NET Core API <--> PostgreSQL + PostGIS
-ASP.NET Core API <--> Redis, when background work requires it
+ASP.NET Core API <--> Redis, for worker job coordination only
 ```
 
-The Next.js application is a presentation client only. It does not access PostgreSQL directly and it contains no Supabase client or credentials. ASP.NET Core is the sole public backend and authorisation boundary. The FastAPI worker remains private and replaceable until .NET equivalents demonstrate equivalent behaviour.
+The Next.js application is a presentation client only. It does not access PostgreSQL directly and it contains no Supabase client or credentials. It reaches ASP.NET through a same-origin `/api` reverse proxy, avoiding cross-origin cookie and CSRF behaviour. ASP.NET Core is the sole public backend and authorisation boundary.
+
+.NET is chosen for the public backend because it is the product owner's preferred long-term platform and provides one supported home for identity, organisation authorisation, persistence, and the public API. Python remains a long-lived, private specialist worker: the existing geospatial, PDF, browser-automation, and queue toolchain is Python-native. Replacing an individual worker function with .NET is a future, separately approved decision that requires contract, correctness, performance, and operational-parity evidence; it is not a migration completion condition.
 
 ## Backend design
 
@@ -56,7 +58,7 @@ Create an ASP.NET Core Web API targeting .NET 10 LTS, organised as a modular mon
 - `CapitalFund`: contributions, correction proposals, fund-goal proposals, and approvals.
 - `Tariffs`: tariff retrieval and role-protected updates.
 - `Feasibility`: report persistence and the existing feasibility API contract.
-- `SpatialGateway`: private HTTP integration with the temporary Python worker.
+- `SpatialGateway`: private HTTP integration with the Python processing worker.
 
 Use EF Core with Npgsql and NetTopologySuite for PostgreSQL/PostGIS access. Database schema changes are EF Core migrations stored with the API. PostGIS extensions, spatial types, indexes, and GIS ingestion remain standard PostgreSQL/PostGIS features, not Supabase features.
 
@@ -71,34 +73,40 @@ The approved roles and capabilities are:
 | Role | Allowed capabilities |
 |---|---|
 | Owner | All capabilities, including team management, governance proposals, financial-correction approval, and operational co-signing. |
-| Chairperson | Team management, contribution recording, project/tariff/settings edits, financial-correction approval, and operational co-signing. |
+| Chairperson | Team management, contribution recording, project/tariff/settings edits, financial-correction proposals and approval, and operational co-signing. |
 | Treasurer | Contribution recording, project/tariff/settings edits, operational co-signing, and fund-goal/correction proposals. Treasurer never approves financial corrections. |
 | Analyst | Contribution recording, project/settings edits, and operational co-signing. Analyst never approves financial corrections. |
 | Viewer | Read-only access. |
 
 The API uses named authorisation policies such as `ManageTeam`, `EditTariffs`, `RecordContribution`, `CoSignFinancial`, `CoSignOperational`, `ProposeFundGoal`, and `ProposeCorrection`. `CoSignFinancial` is available only to Owner and Chairperson; `CoSignOperational` is available to Owner, Chairperson, Treasurer, and Analyst. UI capability checks mirror those policies but are never the security control.
 
+An organisation has exactly one active Owner and at most one active Chairperson. The API requires an ownership transfer before removing or changing the current Owner's membership or role, and it prevents a second Chairperson assignment. This cardinality makes Owner/Chairperson cross-approval unambiguous.
+
 Financial corrections use maker-checker governance: a proposer cannot approve their own correction. A correction is proposable only when the organisation has an active Owner and an active Chairperson before conflict exclusions; otherwise the API instructs the organisation to appoint the missing governing role. For an individual correction, at least one eligible financial approver must remain after excluding both the proposer and the member whose contribution is being corrected. If no approver remains, the API rejects the correction with a conflict-of-interest message rather than the missing-governor message.
 
 A contribution correction rewrites a financial record and therefore requires `CoSignFinancial`, not `CoSignOperational`. An Owner-proposed correction requires an eligible Chairperson approval; a Chairperson-proposed correction requires an eligible Owner approval. Treasurer or Analyst approval never satisfies a correction. Each correction, approval, rejection, and terminal transition is immutable and auditable.
 
-Fund-goal proposals use unanimous-assent governance, not maker-checker: submission creates the proposer's immutable `AssentBySubmission` approval record, distinct from an independent review approval. A proposal applies only when every active, non-Viewer member in the membership snapshot created at submission has an immutable approval record. Any membership creation, removal, deactivation, or role change voids every open fund-goal proposal in the organisation; a new proposal must be submitted against the resulting membership set. Withdrawal is a terminal proposal state and never deletes or alters its underlying approval records.
+Fund-goal proposals use unanimous-assent governance, not maker-checker: submission creates the proposer's immutable `AssentBySubmission` approval record, distinct from an independent review approval. A proposal applies only when every active, non-Viewer member in the membership snapshot created at submission has an immutable approval record. Any membership creation, removal, deactivation, or role change voids every open fund-goal proposal in the organisation; a new proposal must be submitted against the resulting membership set. The membership-change audit event and every proposal it voids are linked in the immutable audit trail. Withdrawal is a terminal proposal state and never deletes or alters its underlying approval records.
 
 ## Data migration and cutover
 
 1. Add Identity, organisations, memberships, and role values through EF migrations.
 2. Port every FGP table from `supabase/migrations` to standard PostgreSQL/PostGIS EF migrations.
 3. Add `organization_id` to tenant-owned records, preserving foreign keys, timestamps, numeric values, and spatial data.
-4. Export real legacy data from Supabase and import it through a repeatable migration command. No records are fabricated, dropped, or assigned silently.
-5. Match legacy `user_id` values to new accounts where possible. Report unmatched records and assign them only through an explicit reviewed migration-owner mapping.
-6. Validate row counts, primary and foreign keys, spatial query results, financial results, and authorisation outcomes before cutover.
-7. Change Next.js to call the C# API. Remove the Drizzle database package, Supabase packages, Supabase configuration, environment variables, CLI instructions, and migrations only after parity passes.
+4. Classify the source database as production data or development/demo data before an import is approved. The current local snapshot contains user and tenant-linked records as well as sample spatial data, so it must not be assumed empty or production solely from repository history.
+5. If the classified source contains data to preserve, export it and import it through a repeatable migration command. No records are fabricated, dropped, or assigned silently. If it is approved as demo-only, replace it with documented deterministic seed data instead.
+6. Match legacy `user_id` values to new accounts where possible. Report unmatched records and assign them only through an explicit reviewed migration-owner mapping.
+7. Validate row counts, primary and foreign keys, spatial query results, financial results, and authorisation outcomes before cutover.
+8. Move routes one bounded module at a time behind the same Next.js `/api` proxy. The old handler and its validated database snapshot remain available until its replacement passes its module gate; rollback restores that route mapping and its source snapshot, not merely a backup file.
+9. Remove the Drizzle database package, Supabase packages, Supabase configuration, environment variables, CLI instructions, and migrations only after every module passes parity and the legacy route set has been retired.
 
-A timestamped source database export is retained as rollback evidence. The implementation plan defines the exact validation reports and cutover gate.
+Each migration module has explicit entry, validation, and rollback conditions. A timestamped source export is evidence for a data restore, not the rollback procedure itself.
 
 ## Local development and verification
 
-Local Docker Compose runs the web app, .NET API, PostgreSQL/PostGIS, Redis, and the temporary worker. Each service has a health endpoint, uses environment-based configuration, and is containerised without cloud assumptions.
+Local Docker Compose runs the web app, .NET API, PostgreSQL/PostGIS, Redis, and the Python worker. Each service has a health endpoint, uses environment-based configuration, and is containerised without cloud assumptions. The API owns public job records and authorisation; the worker owns execution of its queued scraper, PDF, and spatial jobs; Redis is an implementation detail of that queue, never a source of financial or tenancy truth.
+
+Interactive parcel and feasibility requests have a 10-second end-to-end budget. The implementation plan must instrument the web, API, and worker segments, set a module-level target that leaves at least one second for response rendering, and return an authorised asynchronous job for document generation or scraping rather than holding an HTTP request open beyond that budget.
 
 The migration must add automated coverage for:
 
@@ -108,6 +116,17 @@ The migration must add automated coverage for:
 - EF migration execution against a real PostGIS container;
 - calculation and parcel-analysis parity with the current worker tests;
 - end-to-end registration, invitation, role enforcement, tariffs, projects, and check-ins.
+
+The same suite runs locally and as a required CI pull-request gate; a developer's local pass alone does not meet acceptance.
+
+## Accepted risks and deferred decisions
+
+- **Email delivery:** local development uses a non-delivering mail sink. A production email sender for verification and password recovery is a release prerequisite, selected and provisioned only under the separate deployment approval.
+- **Object storage and PDFs:** the existing PDF fields remain portable database metadata. Generated packages are a worker responsibility behind an object-storage interface; local development uses a compatible local store, while Azure Blob configuration is deferred to deployment approval.
+- **Backups and recovery:** local migration verification includes a tested PostgreSQL backup-and-restore procedure. Managed backup retention, off-site copies, recovery-point, and recovery-time objectives are release decisions and cannot be claimed complete in this no-deployment phase.
+- **Schema ownership:** EF Core migrations are the sole production DDL authority, including PostGIS extensions, indexes, and SQL required for spatial features. GIS ingestion is versioned data-import tooling and never creates or mutates schema outside those migrations.
+- **New product scope:** Capital Fund governance is new functionality, not parity with an existing public route. It is separately acceptance-tested after the base identity, tenancy, and existing-route migration path is working.
+- **Source-data disposition:** whether the current Supabase snapshot is production data to preserve or development/demo data remains an explicit owner decision. Until it is classified, no import or destructive cutover is approved.
 
 ## Deployment boundary
 
@@ -122,5 +141,5 @@ The migration is complete only when:
 3. ASP.NET Core owns authentication, the five-role organisation authorisation model, persistence, and public API contracts.
 4. PostgreSQL/PostGIS schema and data are managed by portable .NET migrations and a verified import path.
 5. Existing parcel and feasibility behaviour is preserved and tested.
-6. All role, governance, data-isolation, and migration verification tests pass locally.
+6. All role, governance, data-isolation, and migration verification tests pass both locally and in the required CI pull-request gate.
 7. No cloud deployment occurs without a new explicit approval.
