@@ -28,3 +28,6 @@ supabase/.temp
 .DS_Store
 *.swp
 .clawpatch/
+
+# Local linked worktrees
+.worktrees/
