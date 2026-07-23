@@ -57,7 +57,7 @@
 - Produces `GET /health` returning `{ "status": "ok" }` and a Docker service named `api` on port 8080.
 - Consumes `ConnectionStrings__Fgp`, `Worker__BaseUrl`, and `Redis__ConnectionString`; these values never enter the browser bundle.
 
-- [ ] **Step 1: Write the failing health test.**
+- [x] **Step 1: Write the failing health test.**
 
 ```csharp
 [Fact]
@@ -71,19 +71,19 @@ public async Task GetHealth_returns_ok()
 }
 ```
 
-- [ ] **Step 2: Run it and confirm it fails because the API project does not exist.**
+- [x] **Step 2: Run it and confirm it fails because the API project does not exist.**
 
 Run: `dotnet test apps/api/tests/FGP.Api.Tests/FGP.Api.Tests.csproj --filter FullyQualifiedName~HealthEndpointTests`
 
 Expected: failure indicating the solution/project cannot be found.
 
-- [ ] **Step 3: Create the solution and minimal host.** Target SDK `10.0.100` in `global.json`; use `WebApplication.CreateBuilder`, `app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")))`, and `app.Run()`. Add a Docker Compose `api` service that waits for PostGIS and worker health checks. Add a Mailpit service exposing SMTP on `1025` and its local inbox on `8025`; configure the API with `Email__SmtpHost=mailpit`, but do not make API health depend on Mailpit or Redis.
+- [x] **Step 3: Create the solution and minimal host.** Target SDK `10.0.100` in `global.json`; use `WebApplication.CreateBuilder`, `app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")))`, and `app.Run()`. Add a Docker Compose `api` service that waits for PostGIS and worker health checks. Add a Mailpit service exposing SMTP on `1025` and its local inbox on `8025`; configure the API with `Email__SmtpHost=mailpit`, but do not make API health depend on Mailpit or Redis.
 
-- [ ] **Step 4: Run the focused test and `docker compose -f infra/docker-compose.yml config`.**
+- [x] **Step 4: Run the focused test and `docker compose -f infra/docker-compose.yml config`.**
 
 Expected: health test passes; Compose configuration validates without interpolation errors.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add global.json apps/api infra/docker-compose.yml .env.example
