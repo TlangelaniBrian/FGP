@@ -1,6 +1,6 @@
 # FGP Supabase-to-.NET Migration Design
 
-**Version:** 0.3
+**Version:** 0.4
 
 **Status:** Revised design; pending re-approval before implementation. Cloud deployment requires separate approval.
 
@@ -13,7 +13,7 @@ Replace every Supabase dependency in First Generation Properties with a C#/.NET 
 - Provisioning Azure resources or deploying any service.
 - Operating Kubernetes at launch.
 - Implementing social sign-in, billing, teams beyond the existing investment-club organisation model, or notifications beyond the current product scope.
-- Rewriting the Python spatial/calculation worker before parity is proved.
+- Rewriting the Python processing worker as part of this migration.
 
 ## Current-state findings
 
@@ -73,7 +73,7 @@ The approved roles and capabilities are:
 | Role | Allowed capabilities |
 |---|---|
 | Owner | All capabilities, including team management, governance proposals, financial-correction approval, and operational co-signing. |
-| Chairperson | Team management, contribution recording, project/tariff/settings edits, financial-correction proposals and approval, and operational co-signing. |
+| Chairperson | Team management, contribution recording, project/tariff/settings edits, financial-correction and fund-goal proposals, financial-correction approval, and operational co-signing. |
 | Treasurer | Contribution recording, project/tariff/settings edits, operational co-signing, and fund-goal/correction proposals. Treasurer never approves financial corrections. |
 | Analyst | Contribution recording, project/settings edits, and operational co-signing. Analyst never approves financial corrections. |
 | Viewer | Read-only access. |
@@ -84,9 +84,9 @@ An organisation has exactly one active Owner and at most one active Chairperson.
 
 Financial corrections use maker-checker governance: a proposer cannot approve their own correction. A correction is proposable only when the organisation has an active Owner and an active Chairperson before conflict exclusions; otherwise the API instructs the organisation to appoint the missing governing role. For an individual correction, at least one eligible financial approver must remain after excluding both the proposer and the member whose contribution is being corrected. If no approver remains, the API rejects the correction with a conflict-of-interest message rather than the missing-governor message.
 
-A contribution correction rewrites a financial record and therefore requires `CoSignFinancial`, not `CoSignOperational`. An Owner-proposed correction requires an eligible Chairperson approval; a Chairperson-proposed correction requires an eligible Owner approval. Treasurer or Analyst approval never satisfies a correction. Each correction, approval, rejection, and terminal transition is immutable and auditable.
+A contribution correction rewrites a financial record and therefore requires `CoSignFinancial`, not `CoSignOperational`. An Owner-proposed correction requires an eligible Chairperson approval; a Chairperson-proposed correction requires an eligible Owner approval. A correction submission never creates an approval record. Treasurer or Analyst approval never satisfies a correction. Each correction, approval, rejection, and terminal transition is immutable and auditable.
 
-Fund-goal proposals use unanimous-assent governance, not maker-checker: submission creates the proposer's immutable `AssentBySubmission` approval record, distinct from an independent review approval. A proposal applies only when every active, non-Viewer member in the membership snapshot created at submission has an immutable approval record. Any membership creation, removal, deactivation, or role change voids every open fund-goal proposal in the organisation; a new proposal must be submitted against the resulting membership set. The membership-change audit event and every proposal it voids are linked in the immutable audit trail. Withdrawal is a terminal proposal state and never deletes or alters its underlying approval records.
+Fund-goal proposals use unanimous-assent governance, not maker-checker: Owner, Chairperson, and Treasurer may submit them. Submission semantics are identical for every proposer: submission creates the proposer's immutable `AssentBySubmission` approval record, distinct from an independent review approval. A proposal applies only when every active, non-Viewer member in the membership snapshot created at submission has an immutable approval record. Any membership creation, removal, deactivation, or role change voids every open fund-goal proposal in the organisation; a new proposal must be submitted against the resulting membership set. The membership-change audit event and every proposal it voids are linked in the immutable audit trail. Withdrawal is a terminal proposal state and never deletes or alters its underlying approval records.
 
 ## Data migration and cutover
 
