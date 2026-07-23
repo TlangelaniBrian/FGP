@@ -68,15 +68,17 @@ The approved roles and capabilities are:
 
 | Role | Allowed capabilities |
 |---|---|
-| Owner | All capabilities, including team management and governance proposals. |
-| Chairperson | Team management, contribution recording, project/tariff/settings edits, and co-signing. |
-| Treasurer | Contribution recording, project/tariff/settings edits, co-signing, and fund-goal/correction proposals. |
-| Analyst | Contribution recording, project/settings edits, and co-signing. |
+| Owner | All capabilities, including team management, governance proposals, financial-correction approval, and operational co-signing. |
+| Chairperson | Team management, contribution recording, project/tariff/settings edits, financial-correction approval, and operational co-signing. |
+| Treasurer | Contribution recording, project/tariff/settings edits, operational co-signing, and fund-goal/correction proposals. Treasurer never approves financial corrections. |
+| Analyst | Contribution recording, project/settings edits, and operational co-signing. Analyst never approves financial corrections. |
 | Viewer | Read-only access. |
 
-The API uses named authorisation policies such as `ManageTeam`, `EditTariffs`, `RecordContribution`, `CoSign`, `ProposeFundGoal`, and `ProposeCorrection`. UI capability checks mirror those policies but are never the security control.
+The API uses named authorisation policies such as `ManageTeam`, `EditTariffs`, `RecordContribution`, `CoSignFinancial`, `CoSignOperational`, `ProposeFundGoal`, and `ProposeCorrection`. `CoSignFinancial` is available only to Owner and Chairperson; `CoSignOperational` is available to Owner, Chairperson, Treasurer, and Analyst. UI capability checks mirror those policies but are never the security control.
 
-For maker-checker governance, a proposer cannot approve their own proposal. Each approval is an immutable record tied to an active membership. Goal changes apply only when every active, non-Viewer member has provided a distinct approval. Corrections apply only after the required distinct governing approval is recorded.
+For maker-checker governance, a proposer cannot approve their own proposal. Each approval is an immutable record tied to an active membership. Goal changes apply only when every active, non-Viewer member has provided a distinct approval.
+
+A contribution correction rewrites a financial record and therefore requires `CoSignFinancial`, not `CoSignOperational`. Its approver must be distinct from both the proposer and the member whose contribution is being corrected. An Owner-proposed correction requires an eligible Chairperson approval; a Chairperson-proposed correction requires an eligible Owner approval. The API rejects a correction when fewer than two eligible governing members remain after these conflict exclusions, with an explicit message instructing the organisation to appoint the missing governing role. It never degrades this rule by allowing Treasurer or Analyst approval. Each correction and approval decision is immutable and auditable.
 
 ## Data migration and cutover
 
@@ -97,7 +99,7 @@ Local Docker Compose runs the web app, .NET API, PostgreSQL/PostGIS, Redis, and 
 The migration must add automated coverage for:
 
 - role permissions and cross-organisation isolation;
-- maker-checker and unanimous-goal rules;
+- maker-checker, financial-correction conflict exclusions, minimum-governance, and unanimous-goal rules;
 - malformed request and error-response contracts;
 - EF migration execution against a real PostGIS container;
 - calculation and parcel-analysis parity with the current worker tests;
