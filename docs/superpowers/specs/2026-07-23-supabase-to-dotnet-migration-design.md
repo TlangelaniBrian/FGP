@@ -1,6 +1,8 @@
 # FGP Supabase-to-.NET Migration Design
 
-**Status:** Approved design; implementation and any cloud deployment require separate approval.
+**Version:** 0.2
+
+**Status:** Revised design; pending re-approval before implementation. Cloud deployment requires separate approval.
 
 ## Goal
 
@@ -76,9 +78,11 @@ The approved roles and capabilities are:
 
 The API uses named authorisation policies such as `ManageTeam`, `EditTariffs`, `RecordContribution`, `CoSignFinancial`, `CoSignOperational`, `ProposeFundGoal`, and `ProposeCorrection`. `CoSignFinancial` is available only to Owner and Chairperson; `CoSignOperational` is available to Owner, Chairperson, Treasurer, and Analyst. UI capability checks mirror those policies but are never the security control.
 
-For maker-checker governance, a proposer cannot approve their own proposal. Each approval is an immutable record tied to an active membership. Goal changes apply only when every active, non-Viewer member has provided a distinct approval.
+Financial corrections use maker-checker governance: a proposer cannot approve their own correction. A correction is proposable only when the organisation has an active Owner and an active Chairperson before conflict exclusions; otherwise the API instructs the organisation to appoint the missing governing role. For an individual correction, at least one eligible financial approver must remain after excluding both the proposer and the member whose contribution is being corrected. If no approver remains, the API rejects the correction with a conflict-of-interest message rather than the missing-governor message.
 
-A contribution correction rewrites a financial record and therefore requires `CoSignFinancial`, not `CoSignOperational`. Its approver must be distinct from both the proposer and the member whose contribution is being corrected. An Owner-proposed correction requires an eligible Chairperson approval; a Chairperson-proposed correction requires an eligible Owner approval. The API rejects a correction when fewer than two eligible governing members remain after these conflict exclusions, with an explicit message instructing the organisation to appoint the missing governing role. It never degrades this rule by allowing Treasurer or Analyst approval. Each correction and approval decision is immutable and auditable.
+A contribution correction rewrites a financial record and therefore requires `CoSignFinancial`, not `CoSignOperational`. An Owner-proposed correction requires an eligible Chairperson approval; a Chairperson-proposed correction requires an eligible Owner approval. Treasurer or Analyst approval never satisfies a correction. Each correction, approval, rejection, and terminal transition is immutable and auditable.
+
+Fund-goal proposals use unanimous-assent governance, not maker-checker: submission creates the proposer's immutable `AssentBySubmission` approval record, distinct from an independent review approval. A proposal applies only when every active, non-Viewer member in the membership snapshot created at submission has an immutable approval record. Any membership creation, removal, deactivation, or role change voids every open fund-goal proposal in the organisation; a new proposal must be submitted against the resulting membership set. Withdrawal is a terminal proposal state and never deletes or alters its underlying approval records.
 
 ## Data migration and cutover
 
@@ -99,7 +103,7 @@ Local Docker Compose runs the web app, .NET API, PostgreSQL/PostGIS, Redis, and 
 The migration must add automated coverage for:
 
 - role permissions and cross-organisation isolation;
-- maker-checker, financial-correction conflict exclusions, minimum-governance, and unanimous-goal rules;
+- maker-checker, financial-correction conflict exclusions, minimum-governance, fund-goal assent-by-submission, membership-change invalidation, withdrawal, and unanimous-goal rules;
 - malformed request and error-response contracts;
 - EF migration execution against a real PostGIS container;
 - calculation and parcel-analysis parity with the current worker tests;
