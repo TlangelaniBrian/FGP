@@ -20,7 +20,7 @@ Replace every Supabase dependency in First Generation Properties with a C#/.NET 
 - The Next.js application owns public route handlers for parcel analysis, feasibility, tariff administration, projects, check-ins, and feasibility persistence.
 - Drizzle currently connects those handlers directly to PostgreSQL. FastAPI owns spatial lookup and feasibility calculation.
 - Supabase client packages and configuration remain in the repository, but the UI has no working authentication flow.
-- Existing migrations use Supabase `auth.uid()` row-level-security policies for project-related records. Those policies must not silently disappear when Supabase is removed.
+- Existing migrations contain Supabase `auth.uid()` row-level-security policies for project-related records, but the current direct database route handlers do not establish Supabase authentication and therefore do not enforce them. The .NET authorisation model deliberately supersedes these dead policies with authenticated, organisation-scoped access checks.
 - The product design defines five roles: Owner, Chairperson, Treasurer, Analyst, and Viewer.
 
 ## Architecture
@@ -32,7 +32,7 @@ Next.js web application
         v
 ASP.NET Core API (.NET 10 LTS)
   |- Identity and organisation authorisation
-  |- Projects, capital fund, tariffs, reports, and listings
+  |- Projects, capital fund, tariffs, and reports
   |- PostgreSQL/PostGIS migrations and data access
   `- Private spatial gateway
               |
