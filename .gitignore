@@ -5,6 +5,10 @@ dist/
 .turbo/
 package-lock.json
 
+# .NET build output
+bin/
+obj/
+
 # Python
 __pycache__/
 *.pyc
