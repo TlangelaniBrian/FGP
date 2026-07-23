@@ -147,6 +147,7 @@ git commit -m "feat: add portable postgis schema migrations"
 - Create: `apps/api/src/FGP.Api/Identity/ApplicationUser.cs`
 - Create: `apps/api/src/FGP.Api/Organizations/Organization.cs`
 - Create: `apps/api/src/FGP.Api/Organizations/Membership.cs`
+- Create: `apps/api/src/FGP.Api/Migrations/202607230002_IdentityAndOrganizations.cs`
 - Create: `apps/api/src/FGP.Api/Identity/AuthorizationPolicies.cs`
 - Create: `apps/api/src/FGP.Api/Identity/AuthEndpoints.cs`
 - Create: `apps/api/src/FGP.Api/Organizations/OrganizationEndpoints.cs`
@@ -208,6 +209,9 @@ git commit -m "feat: add organisation identity and policies"
 - Modify: `apps/web/app/page.tsx`
 - Modify: `apps/web/app/projects/page.tsx`
 - Modify: `apps/web/app/settings/page.tsx`
+- Modify: `apps/web/app/evaluate/page.tsx`
+- Modify: `apps/web/app/evaluate/result/page.tsx`
+- Modify: `apps/web/app/scout/page.tsx`
 - Modify: `apps/web/next.config.ts`
 - Modify: `apps/web/package.json`
 - Modify: `pnpm-lock.yaml`
@@ -215,15 +219,19 @@ git commit -m "feat: add organisation identity and policies"
 
 **Interfaces:**
 - Consumes `GET /api/auth/session`, registration, verification, password, invitation, and organisation endpoints from Task 3.
-- Produces `SessionContext` with `user`, `activeOrganization`, and `capabilities`; unauthenticated protected pages redirect to `/sign-in?returnTo=<relative-path>`.
+- Produces `SessionContext` with `user`, `activeOrganization`, and `capabilities`; unauthenticated dashboard, projects, settings, evaluate (including result), and scout pages redirect to `/sign-in?returnTo=<relative-path>`.
 
 - [ ] **Step 1: Write failing session and redirect tests.**
 
 ```ts
-it("redirects an unauthenticated user to sign-in with a relative return path", async () => {
-  render(<RequireSession><ProjectsPage /></RequireSession>);
-  expect(await screen.findByRole("link", { name: /sign in/i })).toHaveAttribute("href", "/sign-in?returnTo=%2Fprojects");
-});
+it.each(["/", "/projects", "/settings", "/evaluate", "/evaluate/result", "/scout"])(
+  "redirects an unauthenticated user from %s to sign-in with a relative return path",
+  async (pathname) => {
+    render(<RequireSession pathname={pathname}><ProtectedPage /></RequireSession>);
+    expect(await screen.findByRole("link", { name: /sign in/i }))
+      .toHaveAttribute("href", `/sign-in?returnTo=${encodeURIComponent(pathname)}`);
+  },
+);
 
 it("hides tariff editing when the session lacks EditTariffs", () => {
   render(<TariffActions capabilities={[]} />);
@@ -237,7 +245,7 @@ Run: `pnpm --filter web test -- session.test.ts`
 
 Expected: failure because no session context, auth pages, or protected-page wrapper exists.
 
-- [ ] **Step 3: Implement the complete user journey and its initial same-origin transport.** Add `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, and a `test` script to `apps/web/package.json`. Configure the `/api/:path*` proxy as an `afterFiles` rewrite to `${API_INTERNAL_ORIGIN}/api/:path*`; filesystem route handlers must win until their own migration task deletes them, and a `beforeFiles` rewrite is prohibited. Add forms for registration, sign-in, verification resend/complete, password recovery/reset, organisation creation, and invitation acceptance. `SessionProvider` fetches `/api/auth/session` through a local, cookie-only `sessionFetch` helper, retains no token in local storage, and exposes server-issued capabilities. Wrap protected dashboard, projects, and settings routes in `RequireSession`; use capabilities only to show or hide controls, never as the authorisation boundary.
+- [ ] **Step 3: Implement the complete user journey and its initial same-origin transport.** Add `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, and a `test` script to `apps/web/package.json`. Configure the `/api/:path*` proxy as an `afterFiles` rewrite to `${API_INTERNAL_ORIGIN}/api/:path*`; filesystem route handlers must win until their own migration task deletes them, and a `beforeFiles` rewrite is prohibited. Add forms for registration, sign-in, verification resend/complete, password recovery/reset, organisation creation, and invitation acceptance. `SessionProvider` fetches `/api/auth/session` through a local, cookie-only `sessionFetch` helper, retains no token in local storage, and exposes server-issued capabilities. Wrap dashboard, projects, settings, evaluate (including result), and scout routes in `RequireSession`; use capabilities only to show or hide controls, never as the authorisation boundary.
 
 - [ ] **Step 4: Run the focused tests, typecheck, and an end-to-end browser flow against Mailpit.**
 
@@ -275,6 +283,12 @@ it("uses a relative API route and preserves credentials", async () => {
   await apiClient.get("/api/projects");
   expect(fetch).toHaveBeenCalledWith("/api/projects", expect.objectContaining({ credentials: "include" }));
 });
+
+it("redirects a non-auth 401 to sign-in with the current relative path", async () => {
+  vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 401 }));
+  await expect(apiClient.get("/api/parcel")).rejects.toMatchObject({ code: "Unauthenticated" });
+  expect(window.location.assign).toHaveBeenCalledWith("/sign-in?returnTo=%2Fscout");
+});
 ```
 
 - [ ] **Step 2: Run the test.**
@@ -283,7 +297,7 @@ Run: `pnpm --filter web test -- api-client.test.ts`
 
 Expected: failure because the shared API client does not exist.
 
-- [ ] **Step 3: Generalise the existing proxy into the shared client.** Preserve the Task 4 `afterFiles` rewrite; filesystem route handlers must win until their own task deletes them, and a `beforeFiles` rewrite is prohibited. Centralise fetch/error parsing in `lib/api-client.ts`, migrate `sessionFetch` to it, and remove unused Supabase libraries and dependencies only after no imports remain.
+- [ ] **Step 3: Generalise the existing proxy into the shared client.** Preserve the Task 4 `afterFiles` rewrite; filesystem route handlers must win until their own task deletes them, and a `beforeFiles` rewrite is prohibited. Centralise fetch/error parsing in `lib/api-client.ts`, migrate `sessionFetch` to it, and remove unused Supabase libraries and dependencies only after no imports remain. For every non-auth request, a `401` redirects to `/sign-in?returnTo=<encoded current relative path>` as a backstop when a protected route was missed.
 
 - [ ] **Step 4: Run the focused test, web typecheck, and build.**
 
@@ -325,7 +339,7 @@ Expected: `404`/missing endpoint failures.
 
 - [ ] **Step 3: Implement typed `HttpClient` gateway and endpoints.** Use a per-request cancellation token with an eight-second worker timeout, preserve worker validation boundaries, attach organisation context before saving reports, and record timings for API and worker segments. Return `202 Accepted` only for future asynchronous documents/scrapes, never for parcel/feasibility.
 
-- [ ] **Step 4: Switch these three web calls to the API and delete their legacy handlers only after parity passes.** Keep their request paths unchanged so page components require no route rewrite.
+- [ ] **Step 4: Delete the three legacy handlers only after parity passes.** Their unchanged relative paths then resolve through the Task 4 `afterFiles` rewrite to the API, so no parcel/feasibility client change is needed.
 
 - [ ] **Step 5: Run API contracts, existing worker tests, and web build.**
 
@@ -389,6 +403,7 @@ git add apps/api apps/web && git commit -m "feat: migrate tariff api routes"
 - Create: `apps/api/src/FGP.Api/CapitalFund/CorrectionProposal.cs`
 - Create: `apps/api/src/FGP.Api/CapitalFund/FundGoalProposal.cs`
 - Create: `apps/api/src/FGP.Api/CapitalFund/GovernanceAuditEvent.cs`
+- Create: `apps/api/src/FGP.Api/Migrations/202607230003_CapitalFundGovernance.cs`
 - Create: `apps/api/src/FGP.Api/CapitalFund/CapitalFundEndpoints.cs`
 - Create: `apps/api/src/FGP.Api/CapitalFund/GovernanceService.cs`
 - Create: `apps/api/tests/FGP.Api.Tests/FinancialCorrectionGovernanceTests.cs`
