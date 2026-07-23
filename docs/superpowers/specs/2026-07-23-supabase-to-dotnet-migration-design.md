@@ -2,7 +2,7 @@
 
 **Version:** 0.4
 
-**Status:** Revised design; pending re-approval before implementation. Cloud deployment requires separate approval.
+**Status:** Approved design. Cloud deployment requires separate approval.
 
 ## Goal
 
@@ -126,6 +126,7 @@ The same suite runs locally and as a required CI pull-request gate; a developer'
 - **Backups and recovery:** local migration verification includes a tested PostgreSQL backup-and-restore procedure. Managed backup retention, off-site copies, recovery-point, and recovery-time objectives are release decisions and cannot be claimed complete in this no-deployment phase.
 - **Schema ownership:** EF Core migrations are the sole production DDL authority, including PostGIS extensions, indexes, and SQL required for spatial features. GIS ingestion is versioned data-import tooling and never creates or mutates schema outside those migrations.
 - **New product scope:** Capital Fund governance is new functionality, not parity with an existing public route. It is separately acceptance-tested after the base identity, tenancy, and existing-route migration path is working.
+- **Solo-governor correction limit:** an organisation without an active Chairperson cannot correct a financial record. This is intentional segregation of duties, not a degraded Treasurer/Analyst fallback; appointing a Chairperson is the resolution.
 - **Source-data disposition:** whether the current Supabase snapshot is production data to preserve or development/demo data remains an explicit owner decision. Until it is classified, no import or destructive cutover is approved.
 
 ## Deployment boundary
