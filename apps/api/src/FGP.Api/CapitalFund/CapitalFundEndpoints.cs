@@ -11,6 +11,27 @@ public static class CapitalFundEndpoints
     public static void MapCapitalFundEndpoints(this WebApplication app)
     {
         app.MapPost("/api/capital/contributions", RecordContributionAsync).RequireAuthorization(Capabilities.RecordContribution);
+        app.MapPost("/api/capital/goals", ProposeGoalAsync).RequireAuthorization();
+    }
+
+    private static async Task<IResult> ProposeGoalAsync(ProposeGoalRequest request, HttpContext context, UserManager<ApplicationUser> users, FgpDbContext database, CancellationToken cancellationToken)
+    {
+        if (request.NewAmount <= 0) return Results.ValidationProblem(new Dictionary<string, string[]> { ["newAmount"] = ["A positive goal amount is required."] });
+        var user = await users.GetUserAsync(context.User);
+        if (user is null) return Results.Unauthorized();
+        var actor = await database.Memberships.SingleOrDefaultAsync(member => member.UserId == user.Id && member.Status == MembershipStatus.Active, cancellationToken);
+        if (actor is null || !CapitalGovernanceRules.CanProposeFundGoal(actor.Role)) return Results.Forbid();
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        if (await database.CapitalGoalProposals.AnyAsync(goal => goal.OrganizationId == actor.OrganizationId && goal.Status == "open", cancellationToken)) return Results.Conflict(new ApiError("OpenGoalExists", "Withdraw or resolve the open fund-goal proposal first."));
+        var electorate = await database.Memberships.Where(member => member.OrganizationId == actor.OrganizationId && member.Status == MembershipStatus.Active && member.Role != OrganizationRole.Viewer).ToListAsync(cancellationToken);
+        var proposal = new CapitalGoalProposal { OrganizationId = actor.OrganizationId, ProposedByMembershipId = actor.Id, NewAmount = request.NewAmount, SubmittedAt = DateTimeOffset.UtcNow };
+        database.CapitalGoalProposals.Add(proposal);
+        await database.SaveChangesAsync(cancellationToken);
+        database.CapitalGoalElectorates.AddRange(electorate.Select(member => new CapitalGoalElectorate { ProposalId = proposal.Id, MembershipId = member.Id }));
+        database.CapitalGoalApprovals.Add(new CapitalGoalApproval { ProposalId = proposal.Id, MembershipId = actor.Id, ApprovalKind = "AssentBySubmission", ApprovedAt = DateTimeOffset.UtcNow });
+        await database.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return Results.Created($"/api/capital/goals/{proposal.Id}", new { proposal.Id });
     }
 
     private static async Task<IResult> RecordContributionAsync(RecordContributionRequest request, HttpContext context, UserManager<ApplicationUser> users, FgpDbContext database, CancellationToken cancellationToken)
@@ -31,3 +52,4 @@ public static class CapitalFundEndpoints
 }
 
 public sealed record RecordContributionRequest(Guid MemberId, decimal Amount, DateOnly ContributionDate, string? Note);
+public sealed record ProposeGoalRequest(decimal NewAmount);
