@@ -198,6 +198,12 @@ public static class OrganizationEndpoints
             return Results.Conflict(new ApiError("LeadershipInvariant", "The requested transfer would create an invalid leadership configuration."));
         }
 
+        database.Entry(currentOwner).State = EntityState.Detached;
+        database.Entry(target).State = EntityState.Detached;
+        await database.Memberships.Where(member => member.Id == currentOwner.Id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(member => member.Role, previousOwnerRole), cancellationToken);
+        await database.Memberships.Where(member => member.Id == membershipId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(member => member.Role, OrganizationRole.Owner), cancellationToken);
         AddMembershipActivity(database, actor, target, "team_ownership_transfer", "Transferred ownership");
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
