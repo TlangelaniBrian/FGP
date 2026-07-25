@@ -8,7 +8,7 @@ import {
   type ColourMode,
   type VisualDirection,
 } from "@/lib/portal-state";
-import { createClient } from "@/lib/supabase";
+import { apiFetch } from "@/lib/api-client";
 import { usePortalActor } from "@/lib/portal-actor";
 import { PortalIcon } from "./PortalIcon";
 
@@ -34,7 +34,7 @@ export function PortalChrome({ colourMode, visualDirection, appearanceReady, onC
 
   useEffect(() => { fetch("/api/activity").then((response) => response.ok ? response.json() : []).then(setActivities).catch(() => setActivities([])); }, []);
 
-  async function signOut() { await createClient().auth.signOut(); window.location.href = "/login"; }
+  async function signOut() { await apiFetch("/api/auth/sign-out", { method: "POST" }); window.location.href = "/login"; }
 
   return (
     <>

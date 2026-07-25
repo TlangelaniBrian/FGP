@@ -8,6 +8,7 @@ import { usePortalActor } from "@/lib/portal-actor";
 import { can } from "@/lib/portal-state";
 import { formatZar } from "@/lib/format";
 import { CostBreakdownBars } from "./_components/CostBreakdownBars";
+import { apiFetch } from "@/lib/api-client";
 
 const pct = (value: number) => `${value.toFixed(1)}%`;
 
@@ -32,7 +33,7 @@ export default function EvaluateResultPage() {
   async function keep() {
     if (!result || !formValues) return;
     setSaving(true);
-    const res = await fetch("/api/feasibility/save", {
+    const res = await apiFetch("/api/feasibility/save", {
       method: "POST",
       headers: actorHeaders(),
       body: JSON.stringify(formValues),
@@ -46,7 +47,7 @@ export default function EvaluateResultPage() {
   async function createProject() {
     if (!saved || !formValues || !projectName.trim()) return;
     setProjectError(null);
-    const res = await fetch("/api/projects", {
+    const res = await apiFetch("/api/projects", {
       method: "POST",
       headers: actorHeaders(),
       body: JSON.stringify({

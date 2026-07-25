@@ -11,9 +11,14 @@
 ## Supabase-to-.NET migration
 
 - [x] Establish the .NET API foundation, local Mailpit service, and health test.
-- [ ] Port the portable PostgreSQL/PostGIS schema and add migration verification.
-- [ ] Implement Identity, organisations, roles, authenticated web flow, and route cutover.
-- [ ] Implement Capital Fund governance, then remove Supabase/Drizzle only after parity and CI gates pass.
+- [x] Port the baseline PostgreSQL/PostGIS schema from Supabase migrations 0001–0004 and add migration verification; the read-only classifier is implemented but has not inspected any source database.
+- [ ] Port the portal schema added by Supabase migrations 0006–0018 before removing the hosted database.
+- [ ] Implement Identity, organisations, roles, and policy enforcement.
+- [ ] Add the authenticated web user journey and same-origin API transport.
+- [ ] Migrate every legacy route group: parcel/feasibility, projects/check-ins/tariffs, listings, documents, scraper jobs, settings/team/activity, session/auth, and Capital Fund.
+- [ ] Implement Capital Fund contributions and approved governance rules, replacing the portal's provisional correction co-signing policy with Owner/Chairperson-only approval and allowing Chairperson fund-goal submission with immutable submission assent.
+- [ ] Classify source data before choosing either approved import or deterministic demo seeding.
+- [ ] Remove Supabase/Drizzle only after every route group passes parity and CI gates.
 
 ## Gates
 

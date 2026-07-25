@@ -23,6 +23,7 @@ __pycache__/
 
 # Docker volumes
 .docker/
+artifacts/
 
 # Supabase
 supabase/.branches

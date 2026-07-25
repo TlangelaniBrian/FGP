@@ -1,0 +1,85 @@
+using FGP.Api.Data;
+using FGP.Api.Identity;
+using FGP.Api.Organizations;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace FGP.Api.CapitalFund;
+
+public static class CapitalFundEndpoints
+{
+    public static void MapCapitalFundEndpoints(this WebApplication app)
+    {
+        app.MapPost("/api/capital/contributions", RecordContributionAsync).RequireAuthorization(Capabilities.RecordContribution);
+        app.MapPost("/api/capital/goals", ProposeGoalAsync).RequireAuthorization();
+        app.MapPost("/api/capital/corrections", ProposeCorrectionAsync).RequireAuthorization(Capabilities.ProposeCorrection);
+        app.MapPost("/api/capital/corrections/{id:long}/approvals", ApproveCorrectionAsync).RequireAuthorization(Capabilities.CoSignFinancial);
+    }
+
+    private static async Task<IResult> ApproveCorrectionAsync(long id, HttpContext context, UserManager<ApplicationUser> users, FgpDbContext database, CancellationToken cancellationToken)
+    {
+        var user = await users.GetUserAsync(context.User); if (user is null) return Results.Unauthorized();
+        var actor = await database.Memberships.SingleOrDefaultAsync(member => member.UserId == user.Id && member.Status == MembershipStatus.Active, cancellationToken); if (actor is null) return Results.Forbid();
+        var proposal = await database.CapitalCorrectionProposals.SingleOrDefaultAsync(item => item.Id == id && item.OrganizationId == actor.OrganizationId && item.Status == "open", cancellationToken); if (proposal is null) return Results.NotFound();
+        var contribution = await database.CapitalContributions.SingleAsync(item => item.Id == proposal.ContributionId, cancellationToken);
+        var members = await database.Memberships.Where(member => member.OrganizationId == actor.OrganizationId).ToListAsync(cancellationToken);
+        var proposer = members.Single(member => member.Id == proposal.ProposedByMembershipId);
+        var subject = members.Single(member => member.Id == contribution.MemberId);
+        if (!CapitalGovernanceRules.CanApproveCorrection(members.Select(member => new MembershipState(member.UserId, member.Role, member.Status)), user.Id, proposer.UserId, subject.UserId)) return Results.Forbid();
+        database.CapitalCorrectionApprovals.Add(new CapitalCorrectionApproval { ProposalId = id, ApproverMembershipId = actor.Id, ApprovedAt = DateTimeOffset.UtcNow }); await database.SaveChangesAsync(cancellationToken);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> ProposeCorrectionAsync(ProposeCorrectionRequest request, HttpContext context, UserManager<ApplicationUser> users, FgpDbContext database, CancellationToken cancellationToken)
+    {
+        if (request.Action is not ("edit" or "remove") || (request.Action == "edit" && request.ProposedAmount is not > 0)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["request"] = ["An edit requires a positive amount; action must be edit or remove."] });
+        var user = await users.GetUserAsync(context.User); if (user is null) return Results.Unauthorized();
+        var actor = await database.Memberships.SingleOrDefaultAsync(member => member.UserId == user.Id && member.Status == MembershipStatus.Active, cancellationToken); if (actor is null) return Results.Forbid();
+        var contribution = await database.CapitalContributions.SingleOrDefaultAsync(item => item.Id == request.ContributionId && item.OrganizationId == actor.OrganizationId && item.Status == "posted", cancellationToken); if (contribution is null) return Results.NotFound();
+        var members = await database.Memberships.Where(member => member.OrganizationId == actor.OrganizationId).ToListAsync(cancellationToken);
+        if (!CapitalGovernanceRules.HasMinimumCorrectionGovernance(members.Select(member => new MembershipState(member.UserId, member.Role, member.Status)))) return Results.Conflict(new ApiError("MinimumGovernanceRequired", "Appoint an active Chairperson to enable contribution corrections."));
+        var proposal = new CapitalCorrectionProposal { OrganizationId = actor.OrganizationId, ContributionId = contribution.Id, ProposedByMembershipId = actor.Id, Action = request.Action, ProposedAmount = request.ProposedAmount, ProposedNote = request.ProposedNote?.Trim(), SubmittedAt = DateTimeOffset.UtcNow };
+        database.CapitalCorrectionProposals.Add(proposal); await database.SaveChangesAsync(cancellationToken);
+        return Results.Created($"/api/capital/corrections/{proposal.Id}", new { proposal.Id });
+    }
+
+    private static async Task<IResult> ProposeGoalAsync(ProposeGoalRequest request, HttpContext context, UserManager<ApplicationUser> users, FgpDbContext database, CancellationToken cancellationToken)
+    {
+        if (request.NewAmount <= 0) return Results.ValidationProblem(new Dictionary<string, string[]> { ["newAmount"] = ["A positive goal amount is required."] });
+        var user = await users.GetUserAsync(context.User);
+        if (user is null) return Results.Unauthorized();
+        var actor = await database.Memberships.SingleOrDefaultAsync(member => member.UserId == user.Id && member.Status == MembershipStatus.Active, cancellationToken);
+        if (actor is null || !CapitalGovernanceRules.CanProposeFundGoal(actor.Role)) return Results.Forbid();
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        if (await database.CapitalGoalProposals.AnyAsync(goal => goal.OrganizationId == actor.OrganizationId && goal.Status == "open", cancellationToken)) return Results.Conflict(new ApiError("OpenGoalExists", "Withdraw or resolve the open fund-goal proposal first."));
+        var electorate = await database.Memberships.Where(member => member.OrganizationId == actor.OrganizationId && member.Status == MembershipStatus.Active && member.Role != OrganizationRole.Viewer).ToListAsync(cancellationToken);
+        var proposal = new CapitalGoalProposal { OrganizationId = actor.OrganizationId, ProposedByMembershipId = actor.Id, NewAmount = request.NewAmount, SubmittedAt = DateTimeOffset.UtcNow };
+        database.CapitalGoalProposals.Add(proposal);
+        await database.SaveChangesAsync(cancellationToken);
+        database.CapitalGoalElectorates.AddRange(electorate.Select(member => new CapitalGoalElectorate { ProposalId = proposal.Id, MembershipId = member.Id }));
+        database.CapitalGoalApprovals.Add(new CapitalGoalApproval { ProposalId = proposal.Id, MembershipId = actor.Id, ApprovalKind = "AssentBySubmission", ApprovedAt = DateTimeOffset.UtcNow });
+        await database.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return Results.Created($"/api/capital/goals/{proposal.Id}", new { proposal.Id });
+    }
+
+    private static async Task<IResult> RecordContributionAsync(RecordContributionRequest request, HttpContext context, UserManager<ApplicationUser> users, FgpDbContext database, CancellationToken cancellationToken)
+    {
+        if (request.Amount <= 0 || request.ContributionDate == default) return Results.ValidationProblem(new Dictionary<string, string[]> { ["request"] = ["A positive amount and contribution date are required."] });
+        var user = await users.GetUserAsync(context.User);
+        if (user is null) return Results.Unauthorized();
+        var actor = await database.Memberships.SingleOrDefaultAsync(member => member.UserId == user.Id && member.Status == MembershipStatus.Active, cancellationToken);
+        if (actor is null) return Results.Forbid();
+        var subject = await database.Memberships.SingleOrDefaultAsync(member => member.Id == request.MemberId && member.OrganizationId == actor.OrganizationId && member.Status == MembershipStatus.Active, cancellationToken);
+        if (subject is null) return Results.NotFound();
+        var contribution = new CapitalContribution { OrganizationId = actor.OrganizationId, MemberId = subject.Id, RecordedByUserId = user.Id, Amount = request.Amount, ContributionDate = request.ContributionDate, Note = request.Note?.Trim(), CreatedAt = DateTimeOffset.UtcNow };
+        database.CapitalContributions.Add(contribution);
+        database.ActivityEvents.Add(new ActivityEvent { OrganizationId = actor.OrganizationId, ActorUserId = user.Id, ActorName = user.DisplayName, EventType = "capital_contribution_recorded", Title = "Recorded contribution", Detail = request.Amount.ToString("0.00"), EntityType = "capital_contribution", CreatedAt = DateTimeOffset.UtcNow });
+        await database.SaveChangesAsync(cancellationToken);
+        return Results.Created($"/api/capital/contributions/{contribution.Id}", new { contribution.Id });
+    }
+}
+
+public sealed record RecordContributionRequest(Guid MemberId, decimal Amount, DateOnly ContributionDate, string? Note);
+public sealed record ProposeGoalRequest(decimal NewAmount);
+public sealed record ProposeCorrectionRequest(long ContributionId, string Action, decimal? ProposedAmount, string? ProposedNote);

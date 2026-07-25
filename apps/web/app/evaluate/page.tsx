@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { useFeasibilityStore } from "@/lib/feasibility-store";
+import { apiFetch } from "@/lib/api-client";
 
 // Pull a human-readable message out of whatever the API returned. The
 // feasibility route may return a string error (worker text), a Zod flatten
@@ -53,7 +54,7 @@ export default function EvaluatePage() {
     setSubmitError(null);
     let res: Response;
     try {
-      res = await fetch("/api/feasibility", {
+      res = await apiFetch("/api/feasibility", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
