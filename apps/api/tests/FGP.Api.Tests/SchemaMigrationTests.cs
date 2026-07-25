@@ -65,6 +65,24 @@ public sealed class SchemaMigrationTests
         Assert.Equal(1, await verificationContext.Parcels.CountAsync());
     }
 
+    [Fact]
+    public async Task Identity_migration_creates_organization_membership_schema()
+    {
+        await using var database = new PostgreSqlBuilder()
+            .WithImage("postgis/postgis:15-3.4")
+            .Build();
+
+        await database.StartAsync();
+        await FgpMigrator.ApplyAsync(database.GetConnectionString());
+
+        await using var connection = new NpgsqlConnection(database.GetConnectionString());
+        await connection.OpenAsync();
+
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT to_regclass('public.organizations') IS NOT NULL"));
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT to_regclass('public.organization_memberships') IS NOT NULL"));
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'organization_memberships_organization_id_user_id_key')"));
+    }
+
     private static async Task<T> ScalarAsync<T>(NpgsqlConnection connection, string commandText)
     {
         await using var command = new NpgsqlCommand(commandText, connection);

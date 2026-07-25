@@ -1,9 +1,13 @@
 using FGP.Api.Data.Entities;
+using FGP.Api.Identity;
+using FGP.Api.Organizations;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace FGP.Api.Data;
 
-public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : DbContext(options)
+public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options)
 {
     public DbSet<Parcel> Parcels => Set<Parcel>();
     public DbSet<ZoningDesignation> ZoningDesignations => Set<ZoningDesignation>();
@@ -22,9 +26,12 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : DbCon
     public DbSet<ProjectCheckin> ProjectCheckins => Set<ProjectCheckin>();
     public DbSet<Milestone> Milestones => Set<Milestone>();
     public DbSet<Tariff> Tariffs => Set<Tariff>();
+    public DbSet<Organization> Organizations => Set<Organization>();
+    public DbSet<Membership> Memberships => Set<Membership>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
         modelBuilder.Entity<Parcel>(entity =>
         {
             entity.ToTable("parcels");
@@ -189,6 +196,7 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : DbCon
 
         ConfigureProjectEntities(modelBuilder);
         ConfigureTariff(modelBuilder);
+        ConfigureOrganizations(modelBuilder);
         UseSnakeCaseColumns(modelBuilder);
 
         modelBuilder.Entity<LandUseHexagon>().Property(x => x.H3Index).HasColumnName("h3_index");
@@ -279,10 +287,44 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : DbCon
         });
     }
 
+    private static void ConfigureOrganizations(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Organization>(entity =>
+        {
+            entity.ToTable("organizations");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<Membership>(entity =>
+        {
+            entity.ToTable("organization_memberships");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OrganizationId).HasColumnName("organization_id");
+            entity.Property(x => x.UserId).HasColumnName("user_id");
+            entity.Property(x => x.InvitedByUserId).HasColumnName("invited_by_user_id");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            entity.Property(x => x.ActivatedAt).HasColumnName("activated_at");
+            entity.Property(x => x.Role).HasConversion<string>();
+            entity.Property(x => x.Status).HasConversion<string>();
+            entity.HasIndex(x => new { x.OrganizationId, x.UserId }).IsUnique();
+            entity.HasOne<Organization>()
+                .WithMany()
+                .HasForeignKey(x => x.OrganizationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
     private static void UseSnakeCaseColumns(ModelBuilder modelBuilder)
     {
         foreach (var entity in modelBuilder.Model.GetEntityTypes())
         {
+            if (entity.GetTableName()?.StartsWith("AspNet", StringComparison.Ordinal) == true) continue;
+
             foreach (var property in entity.GetProperties())
             {
                 property.SetColumnName(ToSnakeCase(property.Name));
