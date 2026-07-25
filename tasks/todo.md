@@ -16,7 +16,7 @@
 - [ ] Implement Identity, organisations, roles, and policy enforcement.
 - [ ] Add the authenticated web user journey and same-origin API transport.
 - [ ] Migrate every legacy route group: parcel/feasibility, projects/check-ins/tariffs, listings, documents, scraper jobs, settings/team/activity, session/auth, and Capital Fund.
-- [ ] Implement Capital Fund contributions and governance rules.
+- [ ] Implement Capital Fund contributions and approved governance rules, replacing the portal's provisional correction co-signing policy with Owner/Chairperson-only approval and allowing Chairperson fund-goal submission with immutable submission assent.
 - [ ] Classify source data before choosing either approved import or deterministic demo seeding.
 - [ ] Remove Supabase/Drizzle only after every route group passes parity and CI gates.
 
