@@ -90,6 +90,76 @@ public sealed class AccountLifecycleTests
         Assert.Equal("Example Club", session.ActiveOrganization.Name);
         Assert.Contains("CoSignFinancial", session.Capabilities);
     }
+
+    [Fact]
+    public async Task Password_reset_token_is_single_use()
+    {
+        await using var app = await IdentityApiFactory.CreateAsync();
+        var client = app.CreateClient();
+        await RegisterAndConfirmAsync(client, app);
+
+        var recovery = await client.PostAsJsonAsync("/api/auth/password-recovery", new { email = "owner@example.test" });
+        Assert.Equal(HttpStatusCode.NoContent, recovery.StatusCode);
+        var resetUri = new Uri(app.EmailSender.Emails.Single(email => email.Kind == "password-reset").Link);
+        var resetQuery = QueryHelpers.ParseQuery(resetUri.Query);
+        var resetToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(resetQuery["token"].Single()!));
+        var request = new
+        {
+            userId = resetQuery["userId"].Single(),
+            token = resetToken,
+            newPassword = "UpdatedCorrectHorseBatteryStaple1!",
+        };
+
+        var reset = await client.PostAsJsonAsync("/api/auth/password-reset", request);
+        var replay = await client.PostAsJsonAsync("/api/auth/password-reset", request);
+        var signIn = await client.PostAsJsonAsync("/api/auth/sign-in", new
+        {
+            email = "owner@example.test",
+            password = "UpdatedCorrectHorseBatteryStaple1!",
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, reset.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, signIn.StatusCode);
+    }
+
+    [Fact]
+    public async Task Sign_out_invalidates_the_session_cookie()
+    {
+        await using var app = await IdentityApiFactory.CreateAsync();
+        var client = app.CreateClient();
+        await RegisterAndConfirmAsync(client, app);
+        await client.PostAsJsonAsync("/api/auth/sign-in", new
+        {
+            email = "owner@example.test",
+            password = "CorrectHorseBatteryStaple1!",
+        });
+
+        var signOut = await client.PostAsync("/api/auth/sign-out", null);
+        var session = await client.GetAsync("/api/auth/session");
+
+        Assert.Equal(HttpStatusCode.NoContent, signOut.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, session.StatusCode);
+    }
+
+    private static async Task RegisterAndConfirmAsync(HttpClient client, IdentityApiFactory app)
+    {
+        await client.PostAsJsonAsync("/api/auth/register", new
+        {
+            email = "owner@example.test",
+            password = "CorrectHorseBatteryStaple1!",
+            displayName = "Owner Example",
+            organizationName = "Example Club",
+        });
+        var confirmationUri = new Uri(app.EmailSender.Emails.Single().Link);
+        var confirmationQuery = QueryHelpers.ParseQuery(confirmationUri.Query);
+        var confirmationToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(confirmationQuery["token"].Single()!));
+        await client.PostAsJsonAsync("/api/auth/verify-email", new
+        {
+            userId = confirmationQuery["userId"].Single(),
+            token = confirmationToken,
+        });
+    }
 }
 
 public sealed record ApiError(string Code, string Message);

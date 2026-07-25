@@ -16,6 +16,9 @@ public static class AuthEndpoints
         auth.MapPost("/register", RegisterAsync);
         auth.MapPost("/verify-email", VerifyEmailAsync);
         auth.MapPost("/sign-in", SignInAsync);
+        auth.MapPost("/password-recovery", StartPasswordRecoveryAsync);
+        auth.MapPost("/password-reset", ResetPasswordAsync);
+        auth.MapPost("/sign-out", SignOutAsync);
         auth.MapGet("/session", GetSessionAsync).RequireAuthorization();
     }
 
@@ -143,6 +146,55 @@ public static class AuthEndpoints
         return Results.NoContent();
     }
 
+    private static async Task<IResult> StartPasswordRecoveryAsync(
+        PasswordRecoveryRequest request,
+        HttpContext httpContext,
+        UserManager<ApplicationUser> userManager,
+        IEmailSender<ApplicationUser> emailSender)
+    {
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            var user = await userManager.FindByEmailAsync(request.Email.Trim());
+            if (user is { EmailConfirmed: true, Email: not null })
+            {
+                var token = await userManager.GeneratePasswordResetTokenAsync(user);
+                var resetLink = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}/api/auth/password-reset?userId={user.Id}&token={WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token))}";
+                await emailSender.SendPasswordResetLinkAsync(user, user.Email, resetLink);
+            }
+        }
+
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> ResetPasswordAsync(
+        PasswordResetRequest request,
+        UserManager<ApplicationUser> userManager)
+    {
+        if (!Guid.TryParse(request.UserId, out var userId) ||
+            string.IsNullOrWhiteSpace(request.Token) ||
+            string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            return Results.Json(new ApiError("InvalidResetToken", "The password reset request is invalid."), statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        if (user is null)
+        {
+            return Results.Json(new ApiError("InvalidResetToken", "The password reset request is invalid."), statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var result = await userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
+        return result.Succeeded
+            ? Results.NoContent()
+            : Results.Json(new ApiError("InvalidResetToken", "The password reset request is invalid or expired."), statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    private static async Task<IResult> SignOutAsync(SignInManager<ApplicationUser> signInManager)
+    {
+        await signInManager.SignOutAsync();
+        return Results.NoContent();
+    }
+
     private static async Task<IResult> GetSessionAsync(
         HttpContext httpContext,
         UserManager<ApplicationUser> userManager,
@@ -177,6 +229,8 @@ public static class AuthEndpoints
 public sealed record RegisterRequest(string? Email, string? Password, string? DisplayName, string? OrganizationName);
 public sealed record VerifyEmailRequest(string? UserId, string? Token);
 public sealed record SignInRequest(string? Email, string? Password);
+public sealed record PasswordRecoveryRequest(string? Email);
+public sealed record PasswordResetRequest(string? UserId, string? Token, string? NewPassword);
 public sealed record ApiError(string Code, string Message);
 public sealed record AuthSession(AuthSessionUser User, AuthSessionOrganization ActiveOrganization, string[] Capabilities);
 public sealed record AuthSessionUser(Guid Id, string Email, string DisplayName);
