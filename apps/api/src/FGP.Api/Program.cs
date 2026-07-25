@@ -3,6 +3,7 @@ using FGP.Api.Identity;
 using FGP.Api.Organizations;
 using FGP.Api.Analysis;
 using FGP.Api.Worker;
+using FGP.Api.CapitalFund;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -60,6 +61,7 @@ app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")));
 app.MapAuthEndpoints();
 app.MapOrganizationEndpoints();
 app.MapAnalysisEndpoints();
+app.MapCapitalFundEndpoints();
 
 app.Run();
 
