@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { db, projectCheckins } from "@fgp/database";
+import { db, projectCheckins, projects } from "@fgp/database";
+import { and, eq } from "drizzle-orm";
+import { requireSessionCapability } from "@/lib/portal-auth";
 
 const schema = z.object({
   weekOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -17,9 +19,13 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guard = await requireSessionCapability("project", req);
+  if (guard.response) return guard.response;
   const { id } = await params;
   const projectId = parseInt(id, 10);
   if (isNaN(projectId)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
+  const [project] = await db.select({ id: projects.id }).from(projects).where(and(eq(projects.id, projectId), eq(projects.userId, guard.actor!.userId))).limit(1);
+  if (!project) return NextResponse.json({ error: "project not found" }, { status: 404 });
 
   const body = await req.json();
   const parsed = schema.safeParse(body);

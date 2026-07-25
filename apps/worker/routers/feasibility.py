@@ -1,10 +1,13 @@
 from __future__ import annotations  # enables X | Y syntax on Python 3.9
+
 from typing import Any, Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
+
 from services.calculations import calculate_feasibility_score
 from services.rate_limit import is_rate_limited
-from services.tariffs import load_tariffs
+from services.tariffs import TariffValidationError, load_tariffs
 
 router = APIRouter(prefix="/analyze", tags=["feasibility"])
 
@@ -30,7 +33,7 @@ class FeasibilityRequest(BaseModel):
     zone_code: str = Field(..., min_length=1, max_length=20)
     size_sqm: float = Field(..., ge=100, le=1_000_000)
     price: float = Field(..., ge=10_000, le=500_000_000)
-    unit_type: Literal["bachelor", "1bed", "2bed"]
+    unit_type: Literal["bachelor", "1bed", "2bed", "luxury"]
     target_units: int = Field(..., ge=1, le=200)
     zone_rules: ZoneRulesInput | None = None
     tariff_year: int = Field(default=2026, ge=2024, le=2030)
@@ -43,14 +46,25 @@ class FeasibilityRequest(BaseModel):
         return v.upper()
 
 
+class CapacityResponse(BaseModel):
+    density_units: int | None
+    far_units: int | None
+    footprint_storey_units: int | None
+
+
 class FeasibilityResponse(BaseModel):
     viable: bool
+    decision_status: Literal["definitive", "degraded"]
+    zoning_evidence_available: bool
+    tariff_year: int
+    build_rate_per_sqm: float
     score: int
     actual_units: int
-    max_units_allowed: int
+    max_units_allowed: int | None
     rezoning_required: bool
-    max_footprint_sqm: float
-    max_buildable_sqm: float
+    capacity: CapacityResponse
+    max_footprint_sqm: float | None
+    max_buildable_sqm: float | None
     cost_land: float
     cost_build: float
     cost_professional_fees: float
@@ -74,12 +88,15 @@ async def analyze_feasibility(
     body: FeasibilityRequest,
     _: None = Depends(rate_limit),
 ) -> dict[str, Any]:
-    rules: dict[str, Any] = {}
+    rules: dict[str, Any] | None = None
     if body.zone_rules:
         rules = body.zone_rules.model_dump(exclude_none=True)
 
     # DB-backed tariffs for the requested year, falling back to constants.
-    tariffs = load_tariffs(body.tariff_year)
+    try:
+        tariffs = load_tariffs(body.tariff_year)
+    except TariffValidationError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
     return calculate_feasibility_score(
         land_price=body.price,
