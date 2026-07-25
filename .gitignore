@@ -5,6 +5,10 @@ dist/
 .turbo/
 package-lock.json
 
+# .NET build output
+bin/
+obj/
+
 # Python
 __pycache__/
 *.pyc
@@ -28,3 +32,14 @@ supabase/.temp
 .DS_Store
 *.swp
 .clawpatch/
+
+# Local linked worktrees
+.worktrees/
+
+# Agent-generated planning artifacts (tracked execution state lives in tasks/)
+.learnings/
+.openai/
+.superpowers/
+docs/plans/
+docs/superpowers/
+memory/

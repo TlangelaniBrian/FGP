@@ -43,6 +43,38 @@ services:
     volumes:
       - ../apps/worker:/app
     command: uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  api:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    working_dir: /workspace
+    command: dotnet run --project apps/api/src/FGP.Api/FGP.Api.csproj --no-launch-profile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Fgp: Host=postgis;Port=5432;Database=postgres;Username=postgres;Password=postgres
+      Worker__BaseUrl: http://worker:8000
+      Redis__ConnectionString: redis:6379
+      Email__SmtpHost: mailpit
+      Email__SmtpPort: 1025
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../:/workspace
+    depends_on:
+      postgis:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
 
 volumes:
   postgis_data:
