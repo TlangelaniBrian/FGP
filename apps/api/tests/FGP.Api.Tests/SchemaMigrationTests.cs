@@ -160,6 +160,22 @@ public sealed class SchemaMigrationTests
         Assert.Equal(1, await verificationContext.Listings.CountAsync(x => x.OrganizationId == organizationId));
     }
 
+    [Fact]
+    public async Task Feasibility_evidence_migration_requires_a_recorded_decision_status()
+    {
+        await using var database = new PostgreSqlBuilder()
+            .WithImage("postgis/postgis:15-3.4")
+            .Build();
+
+        await database.StartAsync();
+        await FgpMigrator.ApplyAsync(database.GetConnectionString());
+
+        await using var connection = new NpgsqlConnection(database.GetConnectionString());
+        await connection.OpenAsync();
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'feasibility_reports' AND column_name = 'decision_status' AND is_nullable = 'NO')"));
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'feasibility_reports_decision_status_check')"));
+    }
+
     private static async Task<T> ScalarAsync<T>(NpgsqlConnection connection, string commandText)
     {
         await using var command = new NpgsqlCommand(commandText, connection);

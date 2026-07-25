@@ -146,6 +146,12 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
             entity.Property(x => x.UserId).HasColumnName("user_id");
             entity.Property(x => x.UnitType).HasColumnName("unit_type");
             entity.Property(x => x.TargetUnits).HasColumnName("target_units");
+            entity.Property(x => x.ActualUnits).HasColumnName("actual_units");
+            entity.Property(x => x.DecisionStatus).HasColumnName("decision_status");
+            entity.Property(x => x.ZoningEvidenceAvailable).HasColumnName("zoning_evidence_available");
+            entity.Property(x => x.CapacityDensityUnits).HasColumnName("capacity_density_units");
+            entity.Property(x => x.CapacityFarUnits).HasColumnName("capacity_far_units");
+            entity.Property(x => x.CapacityFootprintStoreyUnits).HasColumnName("capacity_footprint_storey_units");
             entity.Property(x => x.BuildRatePerSqm).HasColumnName("build_rate_per_sqm");
             entity.Property(x => x.TariffYear).HasColumnName("tariff_year");
             entity.Property(x => x.MaxUnitsAllowed).HasColumnName("max_units_allowed");

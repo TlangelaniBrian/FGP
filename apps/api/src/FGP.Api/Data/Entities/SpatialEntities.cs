@@ -121,6 +121,12 @@ public sealed class FeasibilityReport
     public Guid? UserId { get; set; }
     public required string UnitType { get; set; }
     public int TargetUnits { get; set; }
+    public int ActualUnits { get; set; }
+    public string DecisionStatus { get; set; } = "degraded";
+    public bool ZoningEvidenceAvailable { get; set; }
+    public int? CapacityDensityUnits { get; set; }
+    public int? CapacityFarUnits { get; set; }
+    public int? CapacityFootprintStoreyUnits { get; set; }
     public decimal BuildRatePerSqm { get; set; } = 13500;
     public int TariffYear { get; set; } = 2026;
     public int? MaxUnitsAllowed { get; set; }
