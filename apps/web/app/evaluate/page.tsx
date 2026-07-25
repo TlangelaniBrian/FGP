@@ -32,8 +32,9 @@ const schema = z.object({
   zone_code: z.enum(["RES1", "RES2", "RES3", "RES4", "COM1"]),
   size_sqm: z.number().min(100).max(1_000_000),
   price: z.number().min(10_000).max(500_000_000),
-  unit_type: z.enum(["bachelor", "1bed", "2bed"]),
+  unit_type: z.enum(["bachelor", "1bed", "2bed", "luxury"]),
   target_units: z.number().int().min(1).max(200),
+  tariff_year: z.number().int().min(2024).max(2030),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -45,7 +46,7 @@ export default function EvaluatePage() {
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { municipality: "johannesburg", zone_code: "RES3", unit_type: "bachelor", target_units: 8 },
+    defaultValues: { municipality: "johannesburg", zone_code: "RES3", unit_type: "bachelor", target_units: 8, tariff_year: 2026 },
   });
 
   async function onSubmit(values: FormValues) {
@@ -78,6 +79,8 @@ export default function EvaluatePage() {
       {
         address: values.address, municipality: values.municipality, zoneCode: values.zone_code,
         sizeSqm: values.size_sqm, price: values.price, unitType: values.unit_type, targetUnits: values.target_units,
+        tariffYear: data.tariff_year, decisionStatus: data.decision_status,
+        zoningEvidenceAvailable: data.zoning_evidence_available,
         viable: data.viable, score: data.score, actualUnits: data.actual_units,
         maxUnitsAllowed: data.max_units_allowed, rezoningRequired: data.rezoning_required,
         maxFootprintSqm: data.max_footprint_sqm, maxBuildableSqm: data.max_buildable_sqm,
@@ -98,16 +101,17 @@ export default function EvaluatePage() {
   const err = "text-accent-red text-xs mt-1";
 
   return (
-    <div className="max-w-xl mx-auto p-8">
-      <p className="text-xs font-mono text-text-muted tracking-widest uppercase mb-2">New Analysis</p>
-      <h1 className="font-heading text-2xl font-bold text-text-primary mb-6">Evaluate Land</h1>
+    <div className="portal-page" style={{ maxWidth: 860 }}>
+      <p className="eyebrow">Analysis · Cost oracle</p>
+      <h1 className="page-title" style={{ marginBottom: 8 }}>Evaluate land</h1>
+      <p className="page-subtitle" style={{ marginBottom: 24 }}>Turn a raw listing into a go/no-go investment decision with build cost, yield, and zoning context.</p>
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
         <div>
           <label className={label}>Address</label>
           <input {...register("address")} placeholder="123 Main St, Midrand" className={field} />
           {errors.address && <p className={err}>{errors.address.message}</p>}
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="portal-grid-2">
           <div>
             <label className={label}>Municipality</label>
             <select {...register("municipality")} className={field}>
@@ -123,7 +127,7 @@ export default function EvaluatePage() {
             </select>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="portal-grid-2">
           <div>
             <label className={label}>Size (m²)</label>
             <input type="number" {...register("size_sqm", { valueAsNumber: true })} className={field} />
@@ -135,13 +139,14 @@ export default function EvaluatePage() {
             {errors.price && <p className={err}>{errors.price.message}</p>}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="portal-grid-2">
           <div>
             <label className={label}>Unit Type</label>
             <select {...register("unit_type")} className={field}>
               <option value="bachelor">Bachelor (35m²)</option>
               <option value="1bed">1 Bedroom (55m²)</option>
               <option value="2bed">2 Bedroom (85m²)</option>
+              <option value="luxury">Luxury (120m²)</option>
             </select>
           </div>
           <div>
@@ -149,6 +154,11 @@ export default function EvaluatePage() {
             <input type="number" {...register("target_units", { valueAsNumber: true })} className={field} />
             {errors.target_units && <p className={err}>{errors.target_units.message}</p>}
           </div>
+        </div>
+        <div>
+          <label className={label}>Tariff Year</label>
+          <input type="number" min={2024} max={2030} {...register("tariff_year", { valueAsNumber: true })} className={field} />
+          {errors.tariff_year && <p className={err}>{errors.tariff_year.message}</p>}
         </div>
         {submitError && (
           <div
@@ -161,7 +171,7 @@ export default function EvaluatePage() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="bg-accent-blue text-white font-mono text-sm font-semibold py-2.5 rounded-card transition-colors disabled:opacity-50 hover:opacity-90"
+          className="portal-transition bg-accent-blue text-white font-mono text-sm font-semibold py-2.5 rounded-card disabled:opacity-50 hover:opacity-90"
         >
           {isSubmitting ? "Calculating..." : "Run Analysis"}
         </button>

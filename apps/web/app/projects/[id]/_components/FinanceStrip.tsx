@@ -1,3 +1,5 @@
+import { formatZar } from "@/lib/format";
+
 type Milestone = { targetDate: string; milestone: string; status: string; isMajor: boolean };
 type Project = { monthlySavingZar: string | null; phase1TargetZar: string | null };
 
@@ -14,11 +16,11 @@ export function FinanceStrip({ project, milestones, savedToDate = 0 }: { project
   const label = "text-[10px] font-mono text-text-muted tracking-widest uppercase mb-1";
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="portal-grid-3">
       <div className={statCard}>
         <p className={label}>Saved to Date</p>
-        <p className="font-mono text-2xl font-bold text-accent-green">R {saved.toLocaleString("en-ZA")}</p>
-        <p className="text-text-muted font-mono text-xs mt-1">R {monthly.toLocaleString("en-ZA")}/mo combined</p>
+        <p className="font-mono text-2xl font-bold text-accent-green">{formatZar(saved)}</p>
+        <p className="text-text-muted font-mono text-xs mt-1">{formatZar(monthly)}/mo combined</p>
       </div>
       <div className={statCard}>
         <p className={label}>Next Milestone</p>

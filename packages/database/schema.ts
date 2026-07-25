@@ -1,6 +1,6 @@
 import {
   pgTable, bigserial, text, numeric, integer, boolean,
-  timestamp, date, serial, jsonb,
+  timestamp, date, serial, jsonb, bigint,
 } from "drizzle-orm/pg-core";
 
 export const projects = pgTable("projects", {
@@ -104,9 +104,15 @@ export const feasibilityReports = pgTable("feasibility_reports", {
   userId: text("user_id"),
   unitType: text("unit_type").notNull(),
   targetUnits: integer("target_units").notNull(),
+  actualUnits: integer("actual_units").notNull(),
   buildRatePerSqm: numeric("build_rate_per_sqm").notNull().default("13500"),
   tariffYear: integer("tariff_year").notNull().default(2026),
   maxUnitsAllowed: integer("max_units_allowed"),
+  decisionStatus: text("decision_status").notNull().default("degraded"),
+  zoningEvidenceAvailable: boolean("zoning_evidence_available").notNull().default(false),
+  capacityDensityUnits: integer("capacity_density_units"),
+  capacityFarUnits: integer("capacity_far_units"),
+  capacityFootprintStoreyUnits: integer("capacity_footprint_storey_units"),
   maxBuildableSqm: numeric("max_buildable_sqm"),
   maxFootprintSqm: numeric("max_footprint_sqm"),
   rezoningRequired: boolean("rezoning_required").default(false),
@@ -130,6 +136,7 @@ export const feasibilityReports = pgTable("feasibility_reports", {
 export const listings = pgTable("listings", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   source: text("source").notNull(),
+  userId: text("user_id"),
   sourceId: text("source_id"),
   sourceUrl: text("source_url"),
   address: text("address"),
@@ -141,11 +148,26 @@ export const listings = pgTable("listings", {
   listingType: text("listing_type").default("vacant_land"),
   description: text("description"),
   zoneCode: text("zone_code"),
+  parcelId: bigint("parcel_id", { mode: "number" }),
   dolomiteRisk: text("dolomite_risk"),
   status: text("status").default("new"),
   feasibilityScore: integer("feasibility_score"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const scrapeJobs = pgTable("scrape_jobs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: text("user_id"),
+  source: text("source").notNull(),
+  searchParams: jsonb("search_params"),
+  status: text("status").default("queued"),
+  listingsFound: integer("listings_found").default(0),
+  listingsNew: integer("listings_new").default(0),
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Tariffs — DB-driven so build rates, rents, bulk contributions, transfer-duty
@@ -167,5 +189,103 @@ export const milestones = pgTable("milestones", {
   status: text("status").default("PENDING"),
   owner: text("owner"),
   isMajor: boolean("is_major").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const complianceDocuments = pgTable("compliance_documents", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: text("user_id"),
+  reportId: bigserial("report_id", { mode: "number" }),
+  listingId: bigserial("listing_id", { mode: "number" }),
+  docType: text("doc_type").notNull(),
+  municipality: text("municipality"),
+  status: text("status").default("draft"),
+  prefilledData: jsonb("prefilled_data"),
+  pdfUrl: text("pdf_url"),
+  submittedAt: timestamp("submitted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const capitalContributions = pgTable("capital_contributions", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  memberName: text("member_name").notNull(),
+  memberRole: text("member_role").notNull(),
+  amount: numeric("amount").notNull(),
+  contributionDate: date("contribution_date").notNull(),
+  note: text("note"),
+  status: text("status").default("posted"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const capitalGoalProposals = pgTable("capital_goal_proposals", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  proposedBy: text("proposed_by").notNull(),
+  proposedByRole: text("proposed_by_role").notNull(),
+  proposedByMemberId: bigint("proposed_by_member_id", { mode: "number" }),
+  newAmount: numeric("new_amount").notNull(),
+  status: text("status").default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const capitalCorrectionProposals = pgTable("capital_correction_proposals", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  contributionId: bigserial("contribution_id", { mode: "number" }).notNull(),
+  proposedBy: text("proposed_by").notNull(),
+  proposedByRole: text("proposed_by_role").notNull(),
+  proposedByMemberId: bigint("proposed_by_member_id", { mode: "number" }),
+  action: text("action").notNull(),
+  proposedAmount: numeric("proposed_amount"),
+  proposedNote: text("proposed_note"),
+  status: text("status").default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const capitalGoalElectorate = pgTable("capital_goal_electorate", {
+  proposalId: bigint("proposal_id", { mode: "number" }).notNull(),
+  memberId: bigint("member_id", { mode: "number" }).notNull(),
+  memberName: text("member_name").notNull(),
+  memberRole: text("member_role").notNull(),
+});
+
+export const capitalGoalApprovals = pgTable("capital_goal_approvals", {
+  proposalId: bigint("proposal_id", { mode: "number" }).notNull(),
+  memberId: bigint("member_id", { mode: "number" }).notNull(),
+  approvedAt: timestamp("approved_at").defaultNow(),
+});
+
+export const capitalCorrectionApprovals = pgTable("capital_correction_approvals", {
+  proposalId: bigint("proposal_id", { mode: "number" }).notNull(),
+  memberId: bigint("member_id", { mode: "number" }).notNull(),
+  approvedAt: timestamp("approved_at").defaultNow(),
+});
+
+export const portalSettings = pgTable("portal_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const teamMembers = pgTable("team_members", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: text("user_id").unique(),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  role: text("role").notNull().default("Viewer"),
+  status: text("status").notNull().default("invited"),
+  invitedBy: text("invited_by"),
+  invitedAt: timestamp("invited_at").defaultNow(),
+  acceptedAt: timestamp("accepted_at"),
+});
+
+export const activityEvents = pgTable("activity_events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  actorUserId: text("actor_user_id"),
+  actorName: text("actor_name"),
+  eventType: text("event_type").notNull(),
+  title: text("title").notNull(),
+  detail: text("detail"),
+  entityType: text("entity_type"),
+  entityId: text("entity_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });

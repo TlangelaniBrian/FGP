@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import { CheckInModal } from "./CheckInModal";
+import { can } from "@/lib/portal-state";
+import { usePortalActor } from "@/lib/portal-actor";
 
 type Checkin = {
   weekOf: string;
@@ -14,6 +16,8 @@ type Checkin = {
 
 export function ThisWeek({ projectId, latestCheckin }: { projectId: number; latestCheckin: Checkin }) {
   const [open, setOpen] = useState(false);
+  const actor = usePortalActor();
+  const canEdit = can(actor?.role ?? "Viewer", "project");
 
   const actions = latestCheckin?.actionsNextCall
     ?.split("\n").filter(Boolean)
@@ -23,12 +27,12 @@ export function ThisWeek({ projectId, latestCheckin }: { projectId: number; late
     <div className="bg-bg-surface border border-accent-green/20 rounded-card p-5">
       <div className="flex items-center justify-between mb-4">
         <p className="text-[10px] font-mono text-accent-green tracking-widest uppercase">This Week</p>
-        <button
+        {canEdit && <button
           onClick={() => setOpen(true)}
-          className="text-[10px] font-mono border border-border text-text-muted hover:text-text-primary px-3 py-1 rounded-[6px] transition-colors"
+          className="text-[10px] font-mono border border-border text-text-muted hover:text-text-primary px-3 py-1 rounded-[6px] portal-transition"
         >
           Log check-in
-        </button>
+        </button>}
       </div>
       <div className="flex flex-col gap-2">
         {actions.map((action, i) => (
@@ -44,7 +48,7 @@ export function ThisWeek({ projectId, latestCheckin }: { projectId: number; late
           <p className="text-text-muted font-mono text-xs">{latestCheckin.openIssues}</p>
         </div>
       )}
-      {open && <CheckInModal projectId={projectId} onClose={() => setOpen(false)} />}
+      {canEdit && open && <CheckInModal projectId={projectId} onClose={() => setOpen(false)} />}
     </div>
   );
 }

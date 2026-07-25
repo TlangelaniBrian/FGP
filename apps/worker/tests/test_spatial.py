@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from services.spatial import (
     derive_params,
     normalize_dolomite_risk,
@@ -26,6 +28,11 @@ def test_score_amenities_buckets():
     assert scores["score_transport"] == 100
     assert 0 < scores["score_amenities"] < 100
     assert scores["score_composite"] is not None
+
+
+def test_score_amenities_accepts_postgres_decimal_distances():
+    scores = score_amenities([{"name": "Mall", "type": "mall", "dist_km": Decimal("1.25")}])
+    assert scores["score_amenities"] == 83
 
 
 def test_score_amenities_missing_bucket_is_none():

@@ -1,3 +1,5 @@
+import { formatZar } from "@/lib/format";
+
 type BudgetItem = {
   id: number;
   category: string;
@@ -9,8 +11,6 @@ type BudgetItem = {
   actualCost: string | null;
   status: string;
 };
-
-const fmt = (n: string | null) => n ? `R ${Number(n).toLocaleString("en-ZA")}` : "—";
 
 export function BudgetTable({ items }: { items: BudgetItem[] }) {
   const categories = [...new Set(items.map(i => i.category))];
@@ -26,7 +26,7 @@ export function BudgetTable({ items }: { items: BudgetItem[] }) {
           <div key={cat} className="mb-4">
             <div className="flex justify-between items-center mb-1">
               <p className="text-[9px] font-mono text-text-dim tracking-widest uppercase">{cat}</p>
-              <p className="text-[10px] font-mono text-text-muted">{fmt(String(catTotal))}</p>
+              <p className="text-[10px] font-mono text-text-muted">{formatZar(catTotal)}</p>
             </div>
             {rows.map(row => (
               <div key={row.id} className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
@@ -37,7 +37,7 @@ export function BudgetTable({ items }: { items: BudgetItem[] }) {
                   </span>
                 </div>
                 <div className="flex gap-4 items-center">
-                  <span className="font-mono text-xs text-text-muted w-24 text-right">{fmt(row.totalCost)}</span>
+                  <span className="font-mono text-xs text-text-muted w-24 text-right">{row.totalCost ? formatZar(Number(row.totalCost)) : "—"}</span>
                   <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
                     row.status === "paid" ? "bg-accent-green/10 text-accent-green"
                     : row.status === "quoted" ? "bg-accent-blue/10 text-accent-blue"
@@ -53,7 +53,7 @@ export function BudgetTable({ items }: { items: BudgetItem[] }) {
       })}
       <div className="border-t border-border pt-3 flex justify-between">
         <span className="font-mono text-sm font-bold text-text-muted">Total</span>
-        <span className="font-mono text-sm font-bold text-text-primary">{fmt(String(total))}</span>
+        <span className="font-mono text-sm font-bold text-text-primary">{formatZar(total)}</span>
       </div>
     </div>
   );

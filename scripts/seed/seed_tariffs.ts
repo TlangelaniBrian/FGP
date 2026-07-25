@@ -18,20 +18,20 @@ const rows = [
   {
     tariffYear: TARIFF_YEAR,
     category: "unit_sizes",
-    data: { bachelor: 35, "1bed": 55, "2bed": 85 },
+    data: { bachelor: 35, "1bed": 55, "2bed": 85, luxury: 120 },
   },
   {
     tariffYear: TARIFF_YEAR,
     category: "market_rents",
-    data: { bachelor: 4500, "1bed": 6500, "2bed": 9500 },
+    data: { bachelor: 4500, "1bed": 6500, "2bed": 9500, luxury: 18000 },
   },
   {
     tariffYear: TARIFF_YEAR,
     category: "bulk_contributions",
     data: {
-      johannesburg: { bachelor: [45000, 65000], "1bed": [50000, 65000], "2bed": [55000, 65000] },
-      tshwane: { bachelor: [38000, 55000], "1bed": [42000, 55000], "2bed": [46000, 55000] },
-      ekurhuleni: { bachelor: [40000, 58000], "1bed": [44000, 58000], "2bed": [48000, 58000] },
+      johannesburg: { bachelor: [45000, 65000], "1bed": [50000, 65000], "2bed": [55000, 65000], luxury: [65000, 80000] },
+      tshwane: { bachelor: [38000, 55000], "1bed": [42000, 55000], "2bed": [46000, 55000], luxury: [55000, 70000] },
+      ekurhuleni: { bachelor: [40000, 58000], "1bed": [44000, 58000], "2bed": [48000, 58000], luxury: [58000, 73000] },
     },
   },
   {

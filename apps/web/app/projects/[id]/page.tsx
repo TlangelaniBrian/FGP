@@ -1,15 +1,22 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { ThisWeek } from "./_components/ThisWeek";
 import { FinanceStrip } from "./_components/FinanceStrip";
 import { MilestonesTimeline } from "./_components/MilestonesTimeline";
 import { BudgetTable } from "./_components/BudgetTable";
 import { ContactsTable } from "./_components/ContactsTable";
 import { DecisionLog } from "./_components/DecisionLog";
+import { ProjectActions } from "./_components/ProjectActions";
+import { ProjectDetailEditor } from "./_components/ProjectDetailEditor";
+import { getRequestOrigin } from "@/lib/request-origin";
 
 async function getProject(id: string) {
+  const requestHeaders = await headers();
+  const cookie = requestHeaders.get("cookie") ?? "";
+  const origin = getRequestOrigin(requestHeaders);
   const res = await fetch(
-    `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/api/projects/${id}`,
-    { cache: "no-store" }
+    `${origin}/api/projects/${id}`,
+    { cache: "no-store", headers: { cookie } }
   );
   if (!res.ok) return null;
   return res.json();
@@ -32,12 +39,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <p className="text-text-muted font-mono text-xs mt-1">ERF {project.erfNumber} · {project.township}</p>
           )}
         </div>
-        <span className="text-[10px] font-mono border border-accent-amber text-accent-amber px-3 py-1 rounded-[20px] uppercase tracking-widest">
-          {project.status}
-        </span>
+        <div className="split"><span className="tag tag-amber">{project.status}</span><ProjectActions project={project} /></div>
       </div>
 
       <ThisWeek projectId={project.id} latestCheckin={latestCheckin} />
+      <ProjectDetailEditor projectId={project.id} />
       <FinanceStrip project={project} milestones={milestones} savedToDate={savedToDate ?? 0} />
       <MilestonesTimeline milestones={milestones} />
       <BudgetTable items={budget} />
