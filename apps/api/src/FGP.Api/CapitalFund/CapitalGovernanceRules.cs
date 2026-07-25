@@ -5,6 +5,7 @@ namespace FGP.Api.CapitalFund;
 
 public static class CapitalGovernanceRules
 {
+    public static bool CanProposeFundGoal(OrganizationRole role) => role is OrganizationRole.Owner or OrganizationRole.Chairperson or OrganizationRole.Treasurer;
     public static bool HasMinimumCorrectionGovernance(IEnumerable<MembershipState> members) =>
         members.Count(member => member.Status == MembershipStatus.Active && member.Role == OrganizationRole.Owner) == 1 &&
         members.Count(member => member.Status == MembershipStatus.Active && member.Role == OrganizationRole.Chairperson) == 1;

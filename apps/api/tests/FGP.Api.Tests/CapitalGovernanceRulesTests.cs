@@ -7,6 +7,15 @@ namespace FGP.Api.Tests;
 
 public sealed class CapitalGovernanceRulesTests
 {
+    [Theory]
+    [InlineData(OrganizationRole.Owner, true)]
+    [InlineData(OrganizationRole.Chairperson, true)]
+    [InlineData(OrganizationRole.Treasurer, true)]
+    [InlineData(OrganizationRole.Analyst, false)]
+    [InlineData(OrganizationRole.Viewer, false)]
+    public void Fund_goal_proposal_capability_matches_the_approved_role_table(OrganizationRole role, bool expected) =>
+        Assert.Equal(expected, CapitalGovernanceRules.CanProposeFundGoal(role));
+
     [Fact]
     public void Correction_approval_requires_a_distinct_governing_checker()
     {
