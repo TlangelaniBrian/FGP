@@ -176,6 +176,18 @@ public sealed class SchemaMigrationTests
         Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'feasibility_reports_decision_status_check')"));
     }
 
+    [Fact]
+    public async Task Capital_governance_migration_preserves_immutable_goal_assent_and_one_open_goal()
+    {
+        await using var database = new PostgreSqlBuilder().WithImage("postgis/postgis:15-3.4").Build();
+        await database.StartAsync();
+        await FgpMigrator.ApplyAsync(database.GetConnectionString());
+        await using var connection = new NpgsqlConnection(database.GetConnectionString());
+        await connection.OpenAsync();
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT to_regclass('public.capital_goal_approvals') IS NOT NULL"));
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'capital_goal_one_open_per_organization_idx')"));
+    }
+
     private static async Task<T> ScalarAsync<T>(NpgsqlConnection connection, string commandText)
     {
         await using var command = new NpgsqlCommand(commandText, connection);
