@@ -1,3 +1,9 @@
+using FGP.Api.Data;
+using FGP.Api.Organizations;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+
 namespace FGP.Api.Identity;
 
 public enum OrganizationRole
@@ -18,6 +24,17 @@ public static class Capabilities
     public const string CoSignOperational = "CoSignOperational";
     public const string ProposeFundGoal = "ProposeFundGoal";
     public const string ProposeCorrection = "ProposeCorrection";
+
+    public static IReadOnlyList<string> All { get; } =
+    [
+        ManageTeam,
+        EditTariffs,
+        RecordContribution,
+        CoSignFinancial,
+        CoSignOperational,
+        ProposeFundGoal,
+        ProposeCorrection,
+    ];
 }
 
 public static class CapabilityPolicy
@@ -64,4 +81,28 @@ public static class CapabilityPolicy
         RoleCapabilities[role].Contains(capability);
 
     public static IReadOnlySet<string> For(OrganizationRole role) => RoleCapabilities[role];
+}
+
+public sealed record CapabilityRequirement(string Capability) : IAuthorizationRequirement;
+
+public sealed class CapabilityAuthorizationHandler(FgpDbContext database) : AuthorizationHandler<CapabilityRequirement>
+{
+    protected override async Task HandleRequirementAsync(
+        AuthorizationHandlerContext context,
+        CapabilityRequirement requirement)
+    {
+        var subject = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(subject, out var userId)) return;
+
+        var membership = await database.Memberships
+            .AsNoTracking()
+            .Where(candidate => candidate.UserId == userId && candidate.Status == MembershipStatus.Active)
+            .OrderBy(candidate => candidate.CreatedAt)
+            .Select(candidate => (OrganizationRole?)candidate.Role)
+            .FirstOrDefaultAsync();
+        if (membership is { } role && CapabilityPolicy.Allows(role, requirement.Capability))
+        {
+            context.Succeed(requirement);
+        }
+    }
 }

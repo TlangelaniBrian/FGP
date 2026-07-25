@@ -1,5 +1,6 @@
 using FGP.Api.Data;
 using FGP.Api.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,7 +29,16 @@ builder.Services.ConfigureApplicationCookie(options =>
 });
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
 builder.Services.AddScoped<IEmailSender<ApplicationUser>, SmtpIdentityEmailSender>();
-builder.Services.AddAuthorization();
+builder.Services.AddScoped<IAuthorizationHandler, CapabilityAuthorizationHandler>();
+builder.Services.AddAuthorization(options =>
+{
+    foreach (var capability in Capabilities.All)
+    {
+        options.AddPolicy(capability, policy => policy
+            .RequireAuthenticatedUser()
+            .AddRequirements(new CapabilityRequirement(capability)));
+    }
+});
 
 var app = builder.Build();
 
