@@ -1,6 +1,7 @@
 using FGP.Api.Data.Entities;
 using FGP.Api.Identity;
 using FGP.Api.Organizations;
+using FGP.Api.CapitalFund;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,12 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
     public DbSet<OrganizationInvitation> OrganizationInvitations => Set<OrganizationInvitation>();
     public DbSet<OrganizationSetting> OrganizationSettings => Set<OrganizationSetting>();
     public DbSet<ActivityEvent> ActivityEvents => Set<ActivityEvent>();
+    public DbSet<CapitalContribution> CapitalContributions => Set<CapitalContribution>();
+    public DbSet<CapitalGoalProposal> CapitalGoalProposals => Set<CapitalGoalProposal>();
+    public DbSet<CapitalGoalElectorate> CapitalGoalElectorates => Set<CapitalGoalElectorate>();
+    public DbSet<CapitalGoalApproval> CapitalGoalApprovals => Set<CapitalGoalApproval>();
+    public DbSet<CapitalCorrectionProposal> CapitalCorrectionProposals => Set<CapitalCorrectionProposal>();
+    public DbSet<CapitalCorrectionApproval> CapitalCorrectionApprovals => Set<CapitalCorrectionApproval>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -206,6 +213,7 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
         ConfigureProjectEntities(modelBuilder);
         ConfigureTariff(modelBuilder);
         ConfigureOrganizations(modelBuilder);
+        ConfigureCapitalFund(modelBuilder);
         ConfigureTenantOwnership(modelBuilder);
         UseSnakeCaseColumns(modelBuilder);
 
@@ -378,6 +386,16 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
             entity.HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.SetNull);
         });
+    }
+
+    private static void ConfigureCapitalFund(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<CapitalContribution>().ToTable("capital_contributions").HasKey(x => x.Id);
+        modelBuilder.Entity<CapitalGoalProposal>().ToTable("capital_goal_proposals").HasKey(x => x.Id);
+        modelBuilder.Entity<CapitalGoalElectorate>().ToTable("capital_goal_electorate").HasKey(x => new { x.ProposalId, x.MembershipId });
+        modelBuilder.Entity<CapitalGoalApproval>().ToTable("capital_goal_approvals").HasKey(x => new { x.ProposalId, x.MembershipId });
+        modelBuilder.Entity<CapitalCorrectionProposal>().ToTable("capital_correction_proposals").HasKey(x => x.Id);
+        modelBuilder.Entity<CapitalCorrectionApproval>().ToTable("capital_correction_approvals").HasKey(x => new { x.ProposalId, x.ApproverMembershipId });
     }
 
     private static void ConfigureTenantOwnership(ModelBuilder modelBuilder)
