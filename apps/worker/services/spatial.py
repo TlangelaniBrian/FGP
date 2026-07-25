@@ -21,6 +21,7 @@ MAX_USEFUL_KM = 5.0
 
 def proximity_score(dist_km: float) -> int:
     """Linear proximity score: 100 within NEAR_KM, 0 at/beyond MAX_USEFUL_KM."""
+    dist_km = float(dist_km)  # psycopg returns NUMERIC columns as Decimal
     if dist_km <= NEAR_KM:
         return 100
     if dist_km >= MAX_USEFUL_KM:
