@@ -1,7 +1,7 @@
 # Supabase-to-.NET Migration
 
 - [x] Establish the .NET API foundation, local Mailpit service, and health test.
-- [ ] Port the portable PostgreSQL/PostGIS schema and add migration verification.
+- [x] Port the portable PostgreSQL/PostGIS schema and add migration verification; the read-only classifier is implemented but has not inspected any source database.
 - [ ] Implement Identity, organisations, roles, and policy enforcement.
 - [ ] Add the authenticated web user journey and same-origin API transport.
 - [ ] Migrate parcel, feasibility, projects, check-ins, and tariffs route groups.
