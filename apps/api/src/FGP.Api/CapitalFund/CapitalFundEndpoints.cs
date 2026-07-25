@@ -12,6 +12,20 @@ public static class CapitalFundEndpoints
     {
         app.MapPost("/api/capital/contributions", RecordContributionAsync).RequireAuthorization(Capabilities.RecordContribution);
         app.MapPost("/api/capital/goals", ProposeGoalAsync).RequireAuthorization();
+        app.MapPost("/api/capital/corrections", ProposeCorrectionAsync).RequireAuthorization(Capabilities.ProposeCorrection);
+    }
+
+    private static async Task<IResult> ProposeCorrectionAsync(ProposeCorrectionRequest request, HttpContext context, UserManager<ApplicationUser> users, FgpDbContext database, CancellationToken cancellationToken)
+    {
+        if (request.Action is not ("edit" or "remove") || (request.Action == "edit" && request.ProposedAmount is not > 0)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["request"] = ["An edit requires a positive amount; action must be edit or remove."] });
+        var user = await users.GetUserAsync(context.User); if (user is null) return Results.Unauthorized();
+        var actor = await database.Memberships.SingleOrDefaultAsync(member => member.UserId == user.Id && member.Status == MembershipStatus.Active, cancellationToken); if (actor is null) return Results.Forbid();
+        var contribution = await database.CapitalContributions.SingleOrDefaultAsync(item => item.Id == request.ContributionId && item.OrganizationId == actor.OrganizationId && item.Status == "posted", cancellationToken); if (contribution is null) return Results.NotFound();
+        var members = await database.Memberships.Where(member => member.OrganizationId == actor.OrganizationId).ToListAsync(cancellationToken);
+        if (!CapitalGovernanceRules.HasMinimumCorrectionGovernance(members.Select(member => new MembershipState(member.UserId, member.Role, member.Status)))) return Results.Conflict(new ApiError("MinimumGovernanceRequired", "Appoint an active Chairperson to enable contribution corrections."));
+        var proposal = new CapitalCorrectionProposal { OrganizationId = actor.OrganizationId, ContributionId = contribution.Id, ProposedByMembershipId = actor.Id, Action = request.Action, ProposedAmount = request.ProposedAmount, ProposedNote = request.ProposedNote?.Trim(), SubmittedAt = DateTimeOffset.UtcNow };
+        database.CapitalCorrectionProposals.Add(proposal); await database.SaveChangesAsync(cancellationToken);
+        return Results.Created($"/api/capital/corrections/{proposal.Id}", new { proposal.Id });
     }
 
     private static async Task<IResult> ProposeGoalAsync(ProposeGoalRequest request, HttpContext context, UserManager<ApplicationUser> users, FgpDbContext database, CancellationToken cancellationToken)
@@ -53,3 +67,4 @@ public static class CapitalFundEndpoints
 
 public sealed record RecordContributionRequest(Guid MemberId, decimal Amount, DateOnly ContributionDate, string? Note);
 public sealed record ProposeGoalRequest(decimal NewAmount);
+public sealed record ProposeCorrectionRequest(long ContributionId, string Action, decimal? ProposedAmount, string? ProposedNote);
