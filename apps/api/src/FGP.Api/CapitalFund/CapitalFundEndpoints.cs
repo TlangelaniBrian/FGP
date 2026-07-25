@@ -13,6 +13,21 @@ public static class CapitalFundEndpoints
         app.MapPost("/api/capital/contributions", RecordContributionAsync).RequireAuthorization(Capabilities.RecordContribution);
         app.MapPost("/api/capital/goals", ProposeGoalAsync).RequireAuthorization();
         app.MapPost("/api/capital/corrections", ProposeCorrectionAsync).RequireAuthorization(Capabilities.ProposeCorrection);
+        app.MapPost("/api/capital/corrections/{id:long}/approvals", ApproveCorrectionAsync).RequireAuthorization(Capabilities.CoSignFinancial);
+    }
+
+    private static async Task<IResult> ApproveCorrectionAsync(long id, HttpContext context, UserManager<ApplicationUser> users, FgpDbContext database, CancellationToken cancellationToken)
+    {
+        var user = await users.GetUserAsync(context.User); if (user is null) return Results.Unauthorized();
+        var actor = await database.Memberships.SingleOrDefaultAsync(member => member.UserId == user.Id && member.Status == MembershipStatus.Active, cancellationToken); if (actor is null) return Results.Forbid();
+        var proposal = await database.CapitalCorrectionProposals.SingleOrDefaultAsync(item => item.Id == id && item.OrganizationId == actor.OrganizationId && item.Status == "open", cancellationToken); if (proposal is null) return Results.NotFound();
+        var contribution = await database.CapitalContributions.SingleAsync(item => item.Id == proposal.ContributionId, cancellationToken);
+        var members = await database.Memberships.Where(member => member.OrganizationId == actor.OrganizationId).ToListAsync(cancellationToken);
+        var proposer = members.Single(member => member.Id == proposal.ProposedByMembershipId);
+        var subject = members.Single(member => member.Id == contribution.MemberId);
+        if (!CapitalGovernanceRules.CanApproveCorrection(members.Select(member => new MembershipState(member.UserId, member.Role, member.Status)), user.Id, proposer.UserId, subject.UserId)) return Results.Forbid();
+        database.CapitalCorrectionApprovals.Add(new CapitalCorrectionApproval { ProposalId = id, ApproverMembershipId = actor.Id, ApprovedAt = DateTimeOffset.UtcNow }); await database.SaveChangesAsync(cancellationToken);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> ProposeCorrectionAsync(ProposeCorrectionRequest request, HttpContext context, UserManager<ApplicationUser> users, FgpDbContext database, CancellationToken cancellationToken)
