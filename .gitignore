@@ -35,3 +35,11 @@ supabase/.temp
 
 # Local linked worktrees
 .worktrees/
+
+# Agent-generated planning artifacts (tracked execution state lives in tasks/)
+.learnings/
+.openai/
+.superpowers/
+docs/plans/
+docs/superpowers/
+memory/
