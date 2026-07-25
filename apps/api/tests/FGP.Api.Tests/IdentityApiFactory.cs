@@ -1,5 +1,6 @@
 using FGP.Api.Data;
 using FGP.Api.Identity;
+using FGP.Api.Organizations;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -32,6 +33,8 @@ public sealed class IdentityApiFactory : WebApplicationFactory<global::Program>,
         {
             services.RemoveAll<IEmailSender<ApplicationUser>>();
             services.AddSingleton<IEmailSender<ApplicationUser>>(EmailSender);
+            services.RemoveAll<IOrganizationInvitationSender>();
+            services.AddSingleton<IOrganizationInvitationSender>(EmailSender);
         });
     }
 
@@ -42,7 +45,7 @@ public sealed class IdentityApiFactory : WebApplicationFactory<global::Program>,
     }
 }
 
-public sealed class TestIdentityEmailSender : IEmailSender<ApplicationUser>
+public sealed class TestIdentityEmailSender : IEmailSender<ApplicationUser>, IOrganizationInvitationSender
 {
     public List<IdentityEmail> Emails { get; } = [];
 
@@ -61,6 +64,12 @@ public sealed class TestIdentityEmailSender : IEmailSender<ApplicationUser>
     public Task SendPasswordResetCodeAsync(ApplicationUser user, string email, string resetCode)
     {
         Emails.Add(new IdentityEmail("password-reset-code", email, resetCode));
+        return Task.CompletedTask;
+    }
+
+    public Task SendInvitationAsync(string email, string invitationLink)
+    {
+        Emails.Add(new IdentityEmail("invitation", email, invitationLink));
         return Task.CompletedTask;
     }
 }

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace FGP.Api.Identity;
@@ -33,15 +34,32 @@ public static class AuthEndpoints
         if (string.IsNullOrWhiteSpace(request.Email) ||
             string.IsNullOrWhiteSpace(request.Password) ||
             string.IsNullOrWhiteSpace(request.DisplayName) ||
-            string.IsNullOrWhiteSpace(request.OrganizationName))
+            (string.IsNullOrWhiteSpace(request.InvitationToken) && string.IsNullOrWhiteSpace(request.OrganizationName)))
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["request"] = ["email, password, displayName, and organizationName are required."],
+                ["request"] = ["email, password, displayName, and organizationName are required unless an invitationToken is supplied."],
             });
         }
 
         var email = request.Email.Trim().ToLowerInvariant();
+        OrganizationInvitation? invitation = null;
+        if (!string.IsNullOrWhiteSpace(request.InvitationToken))
+        {
+            var tokenHash = SHA256.HashData(Encoding.UTF8.GetBytes(request.InvitationToken));
+            invitation = await database.OrganizationInvitations
+                .AsNoTracking()
+                .Where(candidate => candidate.TokenHash == tokenHash &&
+                                    candidate.AcceptedAt == null &&
+                                    candidate.RevokedAt == null &&
+                                    candidate.ExpiresAt > DateTimeOffset.UtcNow)
+                .SingleOrDefaultAsync(cancellationToken);
+            if (invitation is null || !string.Equals(invitation.Email, email, StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.Json(new ApiError("InvalidInvitation", "The invitation is invalid, expired, or belongs to another email address."), statusCode: StatusCodes.Status400BadRequest);
+            }
+        }
+
         var user = new ApplicationUser
         {
             Id = Guid.NewGuid(),
@@ -59,19 +77,44 @@ public static class AuthEndpoints
                 .ToDictionary(group => group.Key, group => group.Select(error => error.Description).ToArray()));
         }
 
-        var organization = new Organization
+        Guid organizationId;
+        OrganizationRole role;
+        if (invitation is not null)
         {
-            Id = Guid.NewGuid(),
-            Name = request.OrganizationName.Trim(),
-            CreatedAt = DateTimeOffset.UtcNow,
-        };
-        database.Organizations.Add(organization);
+            var claimed = await database.OrganizationInvitations
+                .Where(candidate => candidate.Id == invitation.Id &&
+                                    candidate.AcceptedAt == null &&
+                                    candidate.RevokedAt == null &&
+                                    candidate.ExpiresAt > DateTimeOffset.UtcNow)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(candidate => candidate.AcceptedAt, DateTimeOffset.UtcNow), cancellationToken);
+            if (claimed != 1)
+            {
+                return Results.Json(new ApiError("InvalidInvitation", "The invitation is no longer available."), statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            organizationId = invitation.OrganizationId;
+            role = invitation.Role;
+        }
+        else
+        {
+            var organization = new Organization
+            {
+                Id = Guid.NewGuid(),
+                Name = request.OrganizationName!.Trim(),
+                CreatedAt = DateTimeOffset.UtcNow,
+            };
+            database.Organizations.Add(organization);
+            organizationId = organization.Id;
+            role = OrganizationRole.Owner;
+        }
+
         database.Memberships.Add(new Membership
         {
             Id = Guid.NewGuid(),
-            OrganizationId = organization.Id,
+            OrganizationId = organizationId,
             UserId = user.Id,
-            Role = OrganizationRole.Owner,
+            Role = role,
             Status = MembershipStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             ActivatedAt = DateTimeOffset.UtcNow,
@@ -226,7 +269,7 @@ public static class AuthEndpoints
     }
 }
 
-public sealed record RegisterRequest(string? Email, string? Password, string? DisplayName, string? OrganizationName);
+public sealed record RegisterRequest(string? Email, string? Password, string? DisplayName, string? OrganizationName, string? InvitationToken = null);
 public sealed record VerifyEmailRequest(string? UserId, string? Token);
 public sealed record SignInRequest(string? Email, string? Password);
 public sealed record PasswordRecoveryRequest(string? Email);

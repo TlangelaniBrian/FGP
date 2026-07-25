@@ -83,6 +83,23 @@ public sealed class SchemaMigrationTests
         Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'organization_memberships_organization_id_user_id_key')"));
     }
 
+    [Fact]
+    public async Task Invitation_migration_creates_hashed_token_store()
+    {
+        await using var database = new PostgreSqlBuilder()
+            .WithImage("postgis/postgis:15-3.4")
+            .Build();
+
+        await database.StartAsync();
+        await FgpMigrator.ApplyAsync(database.GetConnectionString());
+
+        await using var connection = new NpgsqlConnection(database.GetConnectionString());
+        await connection.OpenAsync();
+
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT to_regclass('public.organization_invitations') IS NOT NULL"));
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'organization_invitations' AND column_name = 'token_hash')"));
+    }
+
     private static async Task<T> ScalarAsync<T>(NpgsqlConnection connection, string commandText)
     {
         await using var command = new NpgsqlCommand(commandText, connection);

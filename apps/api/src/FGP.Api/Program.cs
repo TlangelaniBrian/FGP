@@ -1,5 +1,6 @@
 using FGP.Api.Data;
 using FGP.Api.Identity;
+using FGP.Api.Organizations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +29,9 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
-builder.Services.AddScoped<IEmailSender<ApplicationUser>, SmtpIdentityEmailSender>();
+builder.Services.AddScoped<SmtpIdentityEmailSender>();
+builder.Services.AddScoped<IEmailSender<ApplicationUser>>(services => services.GetRequiredService<SmtpIdentityEmailSender>());
+builder.Services.AddScoped<IOrganizationInvitationSender>(services => services.GetRequiredService<SmtpIdentityEmailSender>());
 builder.Services.AddScoped<IAuthorizationHandler, CapabilityAuthorizationHandler>();
 builder.Services.AddAuthorization(options =>
 {
@@ -47,6 +50,7 @@ app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")));
 app.MapAuthEndpoints();
+app.MapOrganizationEndpoints();
 
 app.Run();
 

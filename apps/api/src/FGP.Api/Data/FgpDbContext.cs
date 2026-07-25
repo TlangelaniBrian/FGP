@@ -28,6 +28,7 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
     public DbSet<Tariff> Tariffs => Set<Tariff>();
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<Membership> Memberships => Set<Membership>();
+    public DbSet<OrganizationInvitation> OrganizationInvitations => Set<OrganizationInvitation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -316,6 +317,29 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
                 .WithMany()
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OrganizationInvitation>(entity =>
+        {
+            entity.ToTable("organization_invitations");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OrganizationId).HasColumnName("organization_id");
+            entity.Property(x => x.InvitedByUserId).HasColumnName("invited_by_user_id");
+            entity.Property(x => x.TokenHash).HasColumnName("token_hash");
+            entity.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(x => x.AcceptedAt).HasColumnName("accepted_at");
+            entity.Property(x => x.RevokedAt).HasColumnName("revoked_at");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            entity.Property(x => x.Role).HasConversion<string>();
+            entity.HasIndex(x => x.TokenHash).IsUnique();
+            entity.HasOne<Organization>()
+                .WithMany()
+                .HasForeignKey(x => x.OrganizationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.InvitedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 
