@@ -1,10 +1,4 @@
 # Lessons
 
-## 2026-07-11
-
-- The project’s prescribed `rtk` wrapper currently fails its hook integrity
-  check, so shell inspection uses direct read-only commands until that local
-  environment issue is repaired.
-- The design handoff is behavioral product specification, not a screenshot
-  target. Visual parity without server-backed workflows, persistence, and
-  real handler enforcement is incomplete.
+- Keep generated agent planning, learning, memory, and visual artefacts out of version control; retain only concise, actionable execution state under `tasks/`.
+- The design handoff defines behavioural product requirements; visual fidelity alone is insufficient without persisted, role-enforced workflows.
