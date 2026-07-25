@@ -100,6 +100,66 @@ public sealed class SchemaMigrationTests
         Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'organization_invitations' AND column_name = 'token_hash')"));
     }
 
+    [Fact]
+    public async Task Portal_tenant_migration_scopes_operational_records_to_an_organization()
+    {
+        await using var database = new PostgreSqlBuilder()
+            .WithImage("postgis/postgis:15-3.4")
+            .Build();
+
+        await database.StartAsync();
+        await FgpMigrator.ApplyAsync(database.GetConnectionString());
+
+        await using var connection = new NpgsqlConnection(database.GetConnectionString());
+        await connection.OpenAsync();
+
+        foreach (var table in new[] { "listings", "feasibility_reports", "compliance_documents", "projects", "scrape_jobs" })
+        {
+            Assert.True(await ScalarAsync<bool>(connection, $"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = '{table}' AND column_name = 'organization_id' AND is_nullable = 'NO')"));
+        }
+
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT to_regclass('public.organization_settings') IS NOT NULL"));
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT to_regclass('public.activity_events') IS NOT NULL"));
+    }
+
+    [Fact]
+    public async Task Portal_tenant_migration_persists_operational_records_with_their_organization()
+    {
+        await using var database = new PostgreSqlBuilder()
+            .WithImage("postgis/postgis:15-3.4")
+            .Build();
+
+        await database.StartAsync();
+        await FgpMigrator.ApplyAsync(database.GetConnectionString());
+
+        var options = new DbContextOptionsBuilder<FgpDbContext>()
+            .UseNpgsql(database.GetConnectionString(), npgsql => npgsql.UseNetTopologySuite())
+            .Options;
+        var organizationId = Guid.NewGuid();
+
+        await using (var context = new FgpDbContext(options))
+        {
+            context.Organizations.Add(new FGP.Api.Organizations.Organization
+            {
+                Id = organizationId,
+                Name = "Example Club",
+                CreatedAt = DateTimeOffset.UtcNow,
+            });
+            context.Listings.Add(new Listing
+            {
+                OrganizationId = organizationId,
+                Source = "manual",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+
+            await context.SaveChangesAsync();
+        }
+
+        await using var verificationContext = new FgpDbContext(options);
+        Assert.Equal(1, await verificationContext.Listings.CountAsync(x => x.OrganizationId == organizationId));
+    }
+
     private static async Task<T> ScalarAsync<T>(NpgsqlConnection connection, string commandText)
     {
         await using var command = new NpgsqlCommand(commandText, connection);

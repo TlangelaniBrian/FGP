@@ -3,6 +3,7 @@ namespace FGP.Api.Data.Entities;
 public sealed class Project
 {
     public long Id { get; set; }
+    public Guid OrganizationId { get; set; }
     public Guid? UserId { get; set; }
     public long? ListingId { get; set; }
     public long? ReportId { get; set; }
@@ -22,6 +23,7 @@ public sealed class Project
 public sealed class ProjectBudgetItem
 {
     public long Id { get; set; }
+    public Guid OrganizationId { get; set; }
     public long ProjectId { get; set; }
     public required string Category { get; set; }
     public required string Item { get; set; }
@@ -40,6 +42,7 @@ public sealed class ProjectBudgetItem
 public sealed class ProjectContact
 {
     public long Id { get; set; }
+    public Guid OrganizationId { get; set; }
     public long ProjectId { get; set; }
     public required string Role { get; set; }
     public string? Name { get; set; }
@@ -52,6 +55,7 @@ public sealed class ProjectContact
 public sealed class ProjectDecision
 {
     public long Id { get; set; }
+    public Guid OrganizationId { get; set; }
     public long ProjectId { get; set; }
     public DateOnly DecidedAt { get; set; }
     public required string Decision { get; set; }
@@ -63,6 +67,7 @@ public sealed class ProjectDecision
 public sealed class ProjectCheckin
 {
     public long Id { get; set; }
+    public Guid OrganizationId { get; set; }
     public long ProjectId { get; set; }
     public DateOnly WeekOf { get; set; }
     public string? AttorneyStatus { get; set; }
@@ -78,6 +83,7 @@ public sealed class ProjectCheckin
 public sealed class Milestone
 {
     public long Id { get; set; }
+    public Guid OrganizationId { get; set; }
     public long ProjectId { get; set; }
     public required string TargetDate { get; set; }
     public required string Name { get; set; }

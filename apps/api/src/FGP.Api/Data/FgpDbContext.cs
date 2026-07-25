@@ -29,6 +29,8 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<OrganizationInvitation> OrganizationInvitations => Set<OrganizationInvitation>();
+    public DbSet<OrganizationSetting> OrganizationSettings => Set<OrganizationSetting>();
+    public DbSet<ActivityEvent> ActivityEvents => Set<ActivityEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -198,6 +200,7 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
         ConfigureProjectEntities(modelBuilder);
         ConfigureTariff(modelBuilder);
         ConfigureOrganizations(modelBuilder);
+        ConfigureTenantOwnership(modelBuilder);
         UseSnakeCaseColumns(modelBuilder);
 
         modelBuilder.Entity<LandUseHexagon>().Property(x => x.H3Index).HasColumnName("h3_index");
@@ -340,6 +343,58 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
                 .WithMany()
                 .HasForeignKey(x => x.InvitedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OrganizationSetting>(entity =>
+        {
+            entity.ToTable("organization_settings");
+            entity.HasKey(x => new { x.OrganizationId, x.Key });
+            entity.Property(x => x.OrganizationId).HasColumnName("organization_id");
+            entity.Property(x => x.UpdatedByUserId).HasColumnName("updated_by_user_id");
+            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(x => x.Value).HasColumnType("jsonb");
+            entity.HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UpdatedByUserId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ActivityEvent>(entity =>
+        {
+            entity.ToTable("activity_events");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OrganizationId).HasColumnName("organization_id");
+            entity.Property(x => x.ActorUserId).HasColumnName("actor_user_id");
+            entity.Property(x => x.ActorName).HasColumnName("actor_name");
+            entity.Property(x => x.EventType).HasColumnName("event_type");
+            entity.Property(x => x.EntityType).HasColumnName("entity_type");
+            entity.Property(x => x.EntityId).HasColumnName("entity_id");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            entity.HasIndex(x => new { x.OrganizationId, x.CreatedAt });
+            entity.HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.SetNull);
+        });
+    }
+
+    private static void ConfigureTenantOwnership(ModelBuilder modelBuilder)
+    {
+        ConfigureTenantOwned<Listing>(modelBuilder);
+        ConfigureTenantOwned<FeasibilityReport>(modelBuilder);
+        ConfigureTenantOwned<ComplianceDocument>(modelBuilder);
+        ConfigureTenantOwned<ScrapeJob>(modelBuilder);
+        ConfigureTenantOwned<Project>(modelBuilder);
+        ConfigureTenantOwned<ProjectBudgetItem>(modelBuilder);
+        ConfigureTenantOwned<ProjectContact>(modelBuilder);
+        ConfigureTenantOwned<ProjectDecision>(modelBuilder);
+        ConfigureTenantOwned<ProjectCheckin>(modelBuilder);
+        ConfigureTenantOwned<Milestone>(modelBuilder);
+    }
+
+    private static void ConfigureTenantOwned<TEntity>(ModelBuilder modelBuilder) where TEntity : class
+    {
+        modelBuilder.Entity<TEntity>(entity =>
+        {
+            entity.Property<Guid>("OrganizationId").HasColumnName("organization_id");
+            entity.HasIndex("OrganizationId");
+            entity.HasOne<Organization>().WithMany().HasForeignKey("OrganizationId").OnDelete(DeleteBehavior.Restrict);
         });
     }
 

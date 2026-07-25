@@ -89,6 +89,7 @@ public sealed class Amenity
 public sealed class Listing
 {
     public long Id { get; set; }
+    public Guid OrganizationId { get; set; }
     public required string Source { get; set; }
     public string? SourceId { get; set; }
     public string? SourceUrl { get; set; }
@@ -115,6 +116,7 @@ public sealed class Listing
 public sealed class FeasibilityReport
 {
     public long Id { get; set; }
+    public Guid OrganizationId { get; set; }
     public long ListingId { get; set; }
     public Guid? UserId { get; set; }
     public required string UnitType { get; set; }
@@ -148,6 +150,7 @@ public sealed class FeasibilityReport
 public sealed class ComplianceDocument
 {
     public long Id { get; set; }
+    public Guid OrganizationId { get; set; }
     public long? ReportId { get; set; }
     public long? ListingId { get; set; }
     public required string DocType { get; set; }
@@ -162,6 +165,7 @@ public sealed class ComplianceDocument
 public sealed class ScrapeJob
 {
     public long Id { get; set; }
+    public Guid OrganizationId { get; set; }
     public required string Source { get; set; }
     public JsonDocument? SearchParams { get; set; }
     public string Status { get; set; } = "queued";
