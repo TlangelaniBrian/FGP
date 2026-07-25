@@ -1,6 +1,8 @@
 using FGP.Api.Data;
 using FGP.Api.Identity;
 using FGP.Api.Organizations;
+using FGP.Api.Analysis;
+using FGP.Api.Worker;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -32,6 +34,12 @@ builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email
 builder.Services.AddScoped<SmtpIdentityEmailSender>();
 builder.Services.AddScoped<IEmailSender<ApplicationUser>>(services => services.GetRequiredService<SmtpIdentityEmailSender>());
 builder.Services.AddScoped<IOrganizationInvitationSender>(services => services.GetRequiredService<SmtpIdentityEmailSender>());
+builder.Services.AddHttpClient<IWorkerClient, HttpWorkerClient>(client =>
+{
+    var workerBaseUrl = builder.Configuration["Worker:BaseUrl"] ?? throw new InvalidOperationException("Worker:BaseUrl is required.");
+    client.BaseAddress = new Uri(workerBaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(8);
+});
 builder.Services.AddScoped<IAuthorizationHandler, CapabilityAuthorizationHandler>();
 builder.Services.AddAuthorization(options =>
 {
@@ -51,6 +59,7 @@ app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")));
 app.MapAuthEndpoints();
 app.MapOrganizationEndpoints();
+app.MapAnalysisEndpoints();
 
 app.Run();
 

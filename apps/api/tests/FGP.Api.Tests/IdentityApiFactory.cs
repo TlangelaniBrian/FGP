@@ -1,12 +1,15 @@
 using FGP.Api.Data;
 using FGP.Api.Identity;
 using FGP.Api.Organizations;
+using FGP.Api.Worker;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Testcontainers.PostgreSql;
+using System.Net;
+using System.Text.Json;
 
 namespace FGP.Api.Tests;
 
@@ -17,6 +20,7 @@ public sealed class IdentityApiFactory : WebApplicationFactory<global::Program>,
         .Build();
 
     public TestIdentityEmailSender EmailSender { get; } = new();
+    public TestWorkerClient WorkerClient { get; } = new();
 
     public static async Task<IdentityApiFactory> CreateAsync()
     {
@@ -35,6 +39,8 @@ public sealed class IdentityApiFactory : WebApplicationFactory<global::Program>,
             services.AddSingleton<IEmailSender<ApplicationUser>>(EmailSender);
             services.RemoveAll<IOrganizationInvitationSender>();
             services.AddSingleton<IOrganizationInvitationSender>(EmailSender);
+            services.RemoveAll<IWorkerClient>();
+            services.AddSingleton<IWorkerClient>(WorkerClient);
         });
     }
 
@@ -75,3 +81,18 @@ public sealed class TestIdentityEmailSender : IEmailSender<ApplicationUser>, IOr
 }
 
 public sealed record IdentityEmail(string Kind, string Email, string Link);
+
+public sealed class TestWorkerClient : IWorkerClient
+{
+    public string? LastPath { get; private set; }
+    public JsonDocument? LastRequest { get; private set; }
+    public WorkerResponse Response { get; set; } = new(HttpStatusCode.OK, "{\"found\":false,\"amenities\":[]}");
+
+    public Task<WorkerResponse> PostAsync<TRequest>(string path, TRequest request, CancellationToken cancellationToken)
+    {
+        LastPath = path;
+        LastRequest?.Dispose();
+        LastRequest = JsonSerializer.SerializeToDocument(request);
+        return Task.FromResult(Response);
+    }
+}
