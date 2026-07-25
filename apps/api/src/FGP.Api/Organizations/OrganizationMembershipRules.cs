@@ -14,6 +14,16 @@ public sealed record MembershipState(Guid UserId, OrganizationRole Role, Members
 
 public static class OrganizationMembershipRules
 {
+    public static bool HasValidActiveLeadership(IEnumerable<MembershipState> memberships)
+    {
+        var activeMemberships = memberships
+            .Where(membership => membership.Status == MembershipStatus.Active)
+            .ToArray();
+
+        return activeMemberships.Count(membership => membership.Role == OrganizationRole.Owner) == 1 &&
+               activeMemberships.Count(membership => membership.Role == OrganizationRole.Chairperson) <= 1;
+    }
+
     public static bool CanChangeStatus(
         IEnumerable<MembershipState> memberships,
         Guid userId,
@@ -30,7 +40,6 @@ public static class OrganizationMembershipRules
             .Where(membership => membership.Status == MembershipStatus.Active)
             .ToArray();
 
-        return projected.Count(membership => membership.Role == OrganizationRole.Owner) == 1 &&
-               projected.Count(membership => membership.Role == OrganizationRole.Chairperson) <= 1;
+        return HasValidActiveLeadership(projected);
     }
 }
