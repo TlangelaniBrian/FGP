@@ -56,7 +56,7 @@ public sealed class AnalysisEndpointTests
         }
         var client = app.CreateClient();
         await RegisterConfirmAndSignInAsync(client, app);
-        app.WorkerClient.Response = new(HttpStatusCode.OK, "{\"viable\":true,\"score\":81}");
+        app.WorkerClient.Response = new(HttpStatusCode.OK, ContractTestSession.ValidFeasibilityResult);
 
         var response = await client.PostAsJsonAsync("/api/feasibility", new
         {

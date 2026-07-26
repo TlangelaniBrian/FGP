@@ -30,11 +30,10 @@ services:
     build:
       context: ../apps/worker
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgis:5432/postgres
       REDIS_URL: redis://redis:6379
+      WORKER_SERVICE_TOKEN: ${WORKER_SERVICE_TOKEN:-local-development-worker-token}
     depends_on:
       postgis:
         condition: service_healthy
@@ -63,9 +62,11 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Fgp: Host=postgis;Port=5432;Database=postgres;Username=postgres;Password=postgres
       Worker__BaseUrl: http://worker:8000
+      Worker__ServiceToken: ${WORKER_SERVICE_TOKEN:-local-development-worker-token}
       Redis__ConnectionString: redis:6379
       Email__SmtpHost: mailpit
       Email__SmtpPort: 1025
+      Web__PublicOrigin: http://localhost:3000
     ports:
       - "8080:8080"
     volumes:

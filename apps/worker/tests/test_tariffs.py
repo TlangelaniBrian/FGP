@@ -1,11 +1,15 @@
 import math
+from uuid import UUID
 
 import pytest
 
+import db
 from services.calculations import calculate_feasibility_score
 from services.tariffs import (
     Tariffs,
+    clear_cache,
     default_tariffs,
+    load_tariffs,
     tariffs_from_rows,
 )
 
@@ -186,3 +190,77 @@ def test_default_tariffs_matches_legacy_numbers():
     # 8 units * 35 sqm * 13500 = 3,780,000 build cost
     assert result["cost_build"] == 3_780_000.0
     assert result["cost_professional_fees"] == 453_600.0  # 12%
+
+
+def test_tariff_cache_is_scoped_by_organization(monkeypatch):
+    organization_a = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    organization_b = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+    calls = []
+
+    def fetch_rows(year, organization_id):
+        calls.append((year, organization_id))
+        rate = 14_000 if organization_id == organization_a else 28_000
+        return {
+            "build_rates": {
+                "bachelor": rate,
+                "1bed": 15_000,
+                "2bed": 16_000,
+                "luxury": 19_000,
+            },
+        }
+
+    monkeypatch.setattr(db, "fetch_tariff_rows", fetch_rows)
+    clear_cache()
+
+    tariffs_a = load_tariffs(2026, organization_a)
+    tariffs_b = load_tariffs(2026, organization_b)
+    cached_a = load_tariffs(2026, organization_a)
+
+    assert tariffs_a.build_rates["bachelor"] == 14_000
+    assert tariffs_b.build_rates["bachelor"] == 28_000
+    assert cached_a.build_rates["bachelor"] == 14_000
+    assert calls == [(2026, organization_a), (2026, organization_b)]
+
+
+def test_tariff_query_is_scoped_by_organization(monkeypatch):
+    organization_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+    class Cursor:
+        def __init__(self):
+            self.sql = ""
+            self.params = ()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return None
+
+        def execute(self, sql, params):
+            self.sql = sql
+            self.params = params
+
+        def fetchall(self):
+            return [("build_rates", {"bachelor": 14_000})]
+
+    class Connection:
+        def __init__(self, cursor):
+            self.test_cursor = cursor
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return None
+
+        def cursor(self):
+            return self.test_cursor
+
+    cursor = Cursor()
+    monkeypatch.setattr(db, "_connect", lambda: Connection(cursor))
+
+    rows = db.fetch_tariff_rows(2026, organization_id)
+
+    assert rows == {"build_rates": {"bachelor": 14_000}}
+    assert "organization_id = %s" in " ".join(cursor.sql.split())
+    assert cursor.params == (organization_id, 2026)

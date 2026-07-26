@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { getRequestOrigin } from "@/lib/request-origin";
 import { formatZar } from "@/lib/format";
+import { RequireSession } from "../_components/RequireSession";
 
 type Project = {
   id: number;
@@ -32,7 +33,7 @@ const statusColour: Record<string, string> = {
   complete: "text-text-muted border-text-muted",
 };
 
-export default async function ProjectsPage() {
+async function ProjectsContent() {
   const projects = await getProjects();
   return (
     <div className="portal-page">
@@ -65,5 +66,13 @@ export default async function ProjectsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ProjectsPage() {
+  return (
+    <RequireSession pathname="/projects">
+      <ProjectsContent />
+    </RequireSession>
   );
 }

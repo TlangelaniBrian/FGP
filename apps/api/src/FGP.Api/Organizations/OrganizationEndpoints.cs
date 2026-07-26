@@ -1,8 +1,10 @@
 using FGP.Api.Data;
+using FGP.Api.CapitalFund;
 using FGP.Api.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using System.Security.Cryptography;
 
 namespace FGP.Api.Organizations;
@@ -14,6 +16,7 @@ public static class OrganizationEndpoints
         var organizations = app.MapGroup("/api/organizations");
         organizations.MapPost("/invitations", CreateInvitationAsync).RequireAuthorization(Capabilities.ManageTeam);
         organizations.MapGet("/members", ListMembersAsync).RequireAuthorization();
+        organizations.MapGet("/members/{membershipId:guid}", GetMemberAsync).RequireAuthorization();
         organizations.MapPatch("/members/{membershipId:guid}", UpdateMemberAsync).RequireAuthorization(Capabilities.ManageTeam);
         organizations.MapPost("/members/{membershipId:guid}/transfer-ownership", TransferOwnershipAsync).RequireAuthorization(Capabilities.ManageTeam);
     }
@@ -21,6 +24,7 @@ public static class OrganizationEndpoints
     private static async Task<IResult> CreateInvitationAsync(
         CreateInvitationRequest request,
         HttpContext httpContext,
+        IConfiguration configuration,
         UserManager<ApplicationUser> userManager,
         FgpDbContext database,
         IOrganizationInvitationSender invitationSender,
@@ -36,25 +40,18 @@ public static class OrganizationEndpoints
             });
         }
 
-        var user = await userManager.GetUserAsync(httpContext.User);
-        if (user is null) return Results.Unauthorized();
-
-        var membership = await database.Memberships
-            .AsNoTracking()
-            .Where(candidate => candidate.UserId == user.Id && candidate.Status == MembershipStatus.Active)
-            .OrderBy(candidate => candidate.CreatedAt)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (membership is null) return Results.Forbid();
+        var actor = await ResolveActorAsync(httpContext, userManager, database, cancellationToken);
+        if (actor is null) return Results.Forbid();
 
         var email = request.Email.Trim().ToLowerInvariant();
         var token = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
         var invitation = new OrganizationInvitation
         {
             Id = Guid.NewGuid(),
-            OrganizationId = membership.OrganizationId,
+            OrganizationId = actor.Membership.OrganizationId,
             Email = email,
             Role = role,
-            InvitedByUserId = user.Id,
+            InvitedByUserId = actor.User.Id,
             TokenHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)),
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
             CreatedAt = DateTimeOffset.UtcNow,
@@ -70,7 +67,10 @@ public static class OrganizationEndpoints
             return Results.Conflict(new ApiError("OpenInvitationExists", "An open invitation already exists for this email."));
         }
 
-        var invitationLink = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}/invitations/{token}";
+        var invitationLink = WebLinkBuilder.Build(
+            configuration,
+            httpContext.Request,
+            $"/invitations/{token}");
         await invitationSender.SendInvitationAsync(email, invitationLink);
         return Results.Created($"/api/organizations/invitations/{invitation.Id}",
             new InvitationResponse(invitation.Id, invitation.Email, invitation.Role.ToString(), invitation.ExpiresAt));
@@ -97,12 +97,34 @@ public static class OrganizationEndpoints
         return Results.Ok(members);
     }
 
+    private static async Task<IResult> GetMemberAsync(
+        Guid membershipId,
+        HttpContext httpContext,
+        UserManager<ApplicationUser> userManager,
+        FgpDbContext database,
+        CancellationToken cancellationToken)
+    {
+        var actor = await ResolveActorAsync(httpContext, userManager, database, cancellationToken);
+        if (actor is null) return Results.Unauthorized();
+
+        var member = await database.Memberships
+            .AsNoTracking()
+            .SingleOrDefaultAsync(candidate =>
+                candidate.Id == membershipId &&
+                candidate.OrganizationId == actor.Membership.OrganizationId,
+                cancellationToken);
+        return member is null
+            ? Results.NotFound()
+            : Results.Ok(await ToResponseAsync(database, member, cancellationToken));
+    }
+
     private static async Task<IResult> UpdateMemberAsync(
         Guid membershipId,
         UpdateMemberRequest request,
         HttpContext httpContext,
         UserManager<ApplicationUser> userManager,
         FgpDbContext database,
+        GovernanceService governance,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Role) && string.IsNullOrWhiteSpace(request.Status))
@@ -156,8 +178,13 @@ public static class OrganizationEndpoints
             return Results.Conflict(new ApiError("LeadershipInvariant", "The organization must retain exactly one active Owner and at most one active Chairperson."));
         }
 
-        AddMembershipActivity(database, actor, target, "team_update", "Updated team member");
+        var membershipEvent = AddMembershipActivity(database, actor, target, "team_update", "Updated team member");
         await database.SaveChangesAsync(cancellationToken);
+        await governance.VoidOpenGoalsForMembershipChangeAsync(
+            actor.Membership.OrganizationId,
+            membershipEvent.Id,
+            actor.User.Id,
+            cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return Results.Ok(await ToResponseAsync(database, target, cancellationToken));
     }
@@ -168,6 +195,7 @@ public static class OrganizationEndpoints
         HttpContext httpContext,
         UserManager<ApplicationUser> userManager,
         FgpDbContext database,
+        GovernanceService governance,
         CancellationToken cancellationToken)
     {
         if (!Enum.TryParse<OrganizationRole>(request.PreviousOwnerRole, true, out var previousOwnerRole) || previousOwnerRole == OrganizationRole.Owner)
@@ -204,8 +232,13 @@ public static class OrganizationEndpoints
             .ExecuteUpdateAsync(setters => setters.SetProperty(member => member.Role, previousOwnerRole), cancellationToken);
         await database.Memberships.Where(member => member.Id == membershipId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(member => member.Role, OrganizationRole.Owner), cancellationToken);
-        AddMembershipActivity(database, actor, target, "team_ownership_transfer", "Transferred ownership");
+        var membershipEvent = AddMembershipActivity(database, actor, target, "team_ownership_transfer", "Transferred ownership");
         await database.SaveChangesAsync(cancellationToken);
+        await governance.VoidOpenGoalsForMembershipChangeAsync(
+            actor.Membership.OrganizationId,
+            membershipEvent.Id,
+            actor.User.Id,
+            cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return Results.Ok(await ToResponseAsync(database, target, cancellationToken));
     }
@@ -219,17 +252,22 @@ public static class OrganizationEndpoints
         var user = await userManager.GetUserAsync(httpContext.User);
         if (user is null) return null;
 
+        var organizationClaim = httpContext.User.FindFirstValue("organization_id");
+        if (!Guid.TryParse(organizationClaim, out var organizationId)) return null;
+
         var membership = await database.Memberships
             .AsNoTracking()
-            .Where(candidate => candidate.UserId == user.Id && candidate.Status == MembershipStatus.Active)
-            .OrderBy(candidate => candidate.CreatedAt)
-            .FirstOrDefaultAsync(cancellationToken);
+            .SingleOrDefaultAsync(candidate =>
+                candidate.UserId == user.Id &&
+                candidate.OrganizationId == organizationId &&
+                candidate.Status == MembershipStatus.Active,
+                cancellationToken);
         return membership is null ? null : new OrganizationActor(user, membership);
     }
 
-    private static void AddMembershipActivity(FgpDbContext database, OrganizationActor actor, Membership member, string eventType, string title)
+    private static ActivityEvent AddMembershipActivity(FgpDbContext database, OrganizationActor actor, Membership member, string eventType, string title)
     {
-        database.ActivityEvents.Add(new ActivityEvent
+        var activity = new ActivityEvent
         {
             OrganizationId = actor.Membership.OrganizationId,
             ActorUserId = actor.User.Id,
@@ -240,7 +278,9 @@ public static class OrganizationEndpoints
             EntityType = "organization_membership",
             EntityId = member.Id.ToString(),
             CreatedAt = DateTimeOffset.UtcNow,
-        });
+        };
+        database.ActivityEvents.Add(activity);
+        return activity;
     }
 
     private static async Task<MemberResponse> ToResponseAsync(FgpDbContext database, Membership member, CancellationToken cancellationToken)

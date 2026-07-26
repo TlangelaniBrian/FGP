@@ -14,6 +14,7 @@ import {
   type ScoutCoordinate,
   type ScoutSelectionState,
 } from "@/lib/scout-selection";
+import { RequireSession } from "../_components/RequireSession";
 
 type Coord = ScoutCoordinate;
 type ScoutFilter = "all" | "res2" | "res3" | "res4" | "low-dolomite" | "score-80";
@@ -50,7 +51,7 @@ function matchesFilter(listing: ScoutListing, filter: ScoutFilter): boolean {
   return listing.zoneCode?.toLowerCase() === filter;
 }
 
-export default function ScoutPage() {
+function ScoutContent() {
   const [selection, setSelection] = useState<ScoutSelectionState>(EMPTY_SCOUT_SELECTION);
   const [latInput, setLatInput] = useState("");
   const [lngInput, setLngInput] = useState("");
@@ -255,5 +256,13 @@ export default function ScoutPage() {
 
       {data && <ParcelDetail data={data} />}
     </div>
+  );
+}
+
+export default function ScoutPage() {
+  return (
+    <RequireSession pathname="/scout">
+      <ScoutContent />
+    </RequireSession>
   );
 }

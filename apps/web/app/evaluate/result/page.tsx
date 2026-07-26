@@ -4,18 +4,18 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFeasibilityStore } from "@/lib/feasibility-store";
 import { actorHeaders } from "@/lib/portal-client";
-import { usePortalActor } from "@/lib/portal-actor";
-import { can } from "@/lib/portal-state";
 import { formatZar } from "@/lib/format";
 import { CostBreakdownBars } from "./_components/CostBreakdownBars";
 import { apiFetch } from "@/lib/api-client";
+import { RequireSession } from "../../_components/RequireSession";
+import { useSession } from "@/lib/session-context";
 
 const pct = (value: number) => `${value.toFixed(1)}%`;
 
-export default function EvaluateResultPage() {
+function EvaluateResultContent() {
   const router = useRouter();
-  const actor = usePortalActor();
-  const canEdit = can(actor?.role ?? "Viewer", "record");
+  const { capabilities } = useSession();
+  const canEdit = capabilities.includes("RecordContribution");
   const { result, formValues, clear } = useFeasibilityStore();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ listingId: number; reportId: number } | null>(null);
@@ -175,5 +175,13 @@ export default function EvaluateResultPage() {
         <button onClick={() => { clear(); router.push("/evaluate"); }} className="button button-secondary">New analysis</button>
       </div>
     </div>
+  );
+}
+
+export default function EvaluateResultPage() {
+  return (
+    <RequireSession pathname="/evaluate/result">
+      <EvaluateResultContent />
+    </RequireSession>
   );
 }

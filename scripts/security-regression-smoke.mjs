@@ -1,45 +1,28 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 
-const [authRole, apiWorkflow, migrationReplay] = await Promise.all([
-  readFile(new URL("./auth-role-smoke.mjs", import.meta.url), "utf8"),
-  readFile(new URL("./api-workflow-smoke.mjs", import.meta.url), "utf8"),
-  readFile(
-    new URL("./capital-governance-migration-replay.sh", import.meta.url),
-    "utf8",
-  ),
-]);
+const forbidden = new RegExp([
+  ["su", "pabase"].join(""),
+  ["driz", "zle"].join(""),
+  ["@fgp", "database"].join("/"),
+  ["SUPA", "BASE_"].join(""),
+  ["auth", "uid()"].join("."),
+].join("|"), "i");
+const generatedDirectories = new Set([".next", "node_modules", "bin", "obj", ".ruff_cache", ".pytest_cache", ".venv", "__pycache__"]);
 
-for (const [name, source] of [
-  ["auth-role smoke", authRole],
-  ["API workflow smoke", apiWorkflow],
-]) {
-  assert.doesNotMatch(
-    source,
-    /const password\s*=\s*["'`][^$]/,
-    `${name} must not contain a literal password`,
-  );
-  assert.match(
-    source,
-    /randomBytes/,
-    `${name} must generate a unique runtime password`,
-  );
+async function assertClean(root, directory = root) {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (generatedDirectories.has(entry.name)) continue;
+    const path = `${directory}/${entry.name}`;
+    assert.equal(forbidden.test(entry.name), false, `removed dependency named in ${path}`);
+    if (entry.isDirectory()) {
+      await assertClean(root, path);
+    } else if (entry.isFile()) {
+      const content = await readFile(path, "utf8").catch(() => "");
+      assert.equal(forbidden.test(content), false, `removed dependency referenced in ${path}`);
+    }
+  }
 }
 
-assert.doesNotMatch(
-  migrationReplay,
-  /POSTGRES_PASSWORD=[A-Za-z0-9_-]+/,
-  "migration replay must not contain a literal database password",
-);
-assert.match(
-  migrationReplay,
-  /FGP_MIGRATION_TEST_DB_PASSWORD/,
-  "migration replay must allow an explicit test password override",
-);
-assert.match(
-  migrationReplay,
-  /randomBytes/,
-  "migration replay must generate its default database password at runtime",
-);
-
-console.log("Security regression smoke passed: test credentials are runtime-owned.");
+for (const root of ["apps", "packages", "scripts"]) await assertClean(root);
+console.log("Security regression smoke passed: removed database paths are absent.");

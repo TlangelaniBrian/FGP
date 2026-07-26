@@ -35,4 +35,44 @@ public sealed class CapitalGovernanceRulesTests
         Assert.False(CapitalGovernanceRules.HasMinimumCorrectionGovernance(members));
         Assert.False(CapitalGovernanceRules.CanApproveCorrection(members, owner, treasurer, treasurer));
     }
+
+    [Fact]
+    public void Correction_proposal_has_no_eligible_approver_when_owner_is_subject_of_chair_proposal()
+    {
+        var owner = Guid.NewGuid();
+        var chair = Guid.NewGuid();
+        var members = new[]
+        {
+            new MembershipState(owner, OrganizationRole.Owner, MembershipStatus.Active),
+            new MembershipState(chair, OrganizationRole.Chairperson, MembershipStatus.Active),
+        };
+
+        Assert.False(CapitalGovernanceRules.HasEligibleCorrectionApprover(members, chair, owner));
+    }
+
+    [Fact]
+    public void Correction_proposal_retains_the_other_governor_as_eligible_checker()
+    {
+        var owner = Guid.NewGuid();
+        var chair = Guid.NewGuid();
+        var treasurer = Guid.NewGuid();
+        var members = new[]
+        {
+            new MembershipState(owner, OrganizationRole.Owner, MembershipStatus.Active),
+            new MembershipState(chair, OrganizationRole.Chairperson, MembershipStatus.Active),
+            new MembershipState(treasurer, OrganizationRole.Treasurer, MembershipStatus.Active),
+        };
+
+        Assert.True(CapitalGovernanceRules.HasEligibleCorrectionApprover(members, treasurer, owner));
+    }
+
+    [Fact]
+    public void Fund_goal_assent_requires_exactly_the_submission_electorate()
+    {
+        var electorate = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+
+        Assert.False(CapitalGovernanceRules.HasUnanimousGoalAssent(electorate, electorate[..2]));
+        Assert.False(CapitalGovernanceRules.HasUnanimousGoalAssent(electorate, electorate.Append(Guid.NewGuid())));
+        Assert.True(CapitalGovernanceRules.HasUnanimousGoalAssent(electorate, electorate.Reverse()));
+    }
 }

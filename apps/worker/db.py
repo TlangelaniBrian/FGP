@@ -6,10 +6,12 @@ enough for our low request volume and it keeps failure handling simple). All
 spatial SQL uses parameterised placeholders — never f-string interpolation —
 per the security standards in CLAUDE.md.
 """
+
 from __future__ import annotations
 
 import logging
 from typing import Any
+from uuid import UUID
 
 from config import settings
 
@@ -24,13 +26,17 @@ def _connect():
     return psycopg.connect(settings.database_url, connect_timeout=_CONNECT_TIMEOUT)
 
 
-def fetch_tariff_rows(year: int) -> dict[str, Any]:
-    """Return {category: data(JSONB)} for a tariff year. Empty dict if none."""
+def fetch_tariff_rows(year: int, organization_id: UUID) -> dict[str, Any]:
+    """Return one organization's tariff categories for a year."""
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT category, data FROM tariffs WHERE tariff_year = %s",
-                (year,),
+                """
+                SELECT category, data
+                FROM tariffs
+                WHERE organization_id = %s AND tariff_year = %s
+                """,
+                (organization_id, year),
             )
             return {row[0]: row[1] for row in cur.fetchall()}
 

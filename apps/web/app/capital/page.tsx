@@ -468,8 +468,12 @@ export default function CapitalPage() {
                     </small>
                   </span>
                   {can(actor?.role ?? "Viewer", "cosign") &&
-                    proposal.proposedByMemberId !== actor?.memberId &&
-                    !proposal.approvals.includes(actor?.memberId ?? -1) && (
+                    String(proposal.proposedByMemberId) !==
+                      String(actor?.memberId) &&
+                    !proposal.approvals.some(
+                      (memberId) =>
+                        String(memberId) === String(actor?.memberId),
+                    ) && (
                     <button
                       className="button button-secondary"
                       onClick={() => approveCorrection(proposal)}
@@ -556,7 +560,10 @@ export default function CapitalPage() {
                   ))}
                 </div>
                 {can(actor?.role ?? "Viewer", "cosign") &&
-                  !goalProposal.approvals.includes(actor?.memberId ?? -1) && (
+                  !goalProposal.approvals.some(
+                    (memberId) =>
+                      String(memberId) === String(actor?.memberId),
+                  ) && (
                   <button
                     className="button button-secondary"
                     style={{ marginTop: 10 }}

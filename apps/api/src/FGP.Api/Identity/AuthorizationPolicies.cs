@@ -92,14 +92,21 @@ public sealed class CapabilityAuthorizationHandler(FgpDbContext database) : Auth
         CapabilityRequirement requirement)
     {
         var subject = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(subject, out var userId)) return;
+        var organization = context.User.FindFirstValue("organization_id");
+        if (!Guid.TryParse(subject, out var userId) ||
+            !Guid.TryParse(organization, out var organizationId))
+        {
+            return;
+        }
 
         var membership = await database.Memberships
             .AsNoTracking()
-            .Where(candidate => candidate.UserId == userId && candidate.Status == MembershipStatus.Active)
-            .OrderBy(candidate => candidate.CreatedAt)
+            .Where(candidate =>
+                candidate.UserId == userId &&
+                candidate.OrganizationId == organizationId &&
+                candidate.Status == MembershipStatus.Active)
             .Select(candidate => (OrganizationRole?)candidate.Role)
-            .FirstOrDefaultAsync();
+            .SingleOrDefaultAsync();
         if (membership is { } role && CapabilityPolicy.Allows(role, requirement.Capability))
         {
             context.Succeed(requirement);

@@ -1,4 +1,5 @@
 using FGP.Api.Data;
+using FGP.Api.CapitalFund;
 using FGP.Api.Organizations;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
@@ -16,6 +17,7 @@ public static class AuthEndpoints
         var auth = app.MapGroup("/api/auth");
         auth.MapPost("/register", RegisterAsync);
         auth.MapPost("/verify-email", VerifyEmailAsync);
+        auth.MapPost("/verification-resend", ResendVerificationAsync);
         auth.MapPost("/sign-in", SignInAsync);
         auth.MapPost("/password-recovery", StartPasswordRecoveryAsync);
         auth.MapPost("/password-reset", ResetPasswordAsync);
@@ -26,8 +28,10 @@ public static class AuthEndpoints
     private static async Task<IResult> RegisterAsync(
         RegisterRequest request,
         HttpContext httpContext,
+        IConfiguration configuration,
         UserManager<ApplicationUser> userManager,
         FgpDbContext database,
+        GovernanceService governance,
         IEmailSender<ApplicationUser> emailSender,
         CancellationToken cancellationToken)
     {
@@ -72,6 +76,13 @@ public static class AuthEndpoints
         var createResult = await userManager.CreateAsync(user, request.Password);
         if (!createResult.Succeeded)
         {
+            if (createResult.Errors.Any(error => error.Code is "DuplicateUserName" or "DuplicateEmail"))
+            {
+                return Results.Json(
+                    new ApiError("RegistrationUnavailable", "Unable to create this account."),
+                    statusCode: StatusCodes.Status409Conflict);
+            }
+
             return Results.ValidationProblem(createResult.Errors
                 .GroupBy(error => error.Code)
                 .ToDictionary(group => group.Key, group => group.Select(error => error.Description).ToArray()));
@@ -109,7 +120,7 @@ public static class AuthEndpoints
             role = OrganizationRole.Owner;
         }
 
-        database.Memberships.Add(new Membership
+        var membership = new Membership
         {
             Id = Guid.NewGuid(),
             OrganizationId = organizationId,
@@ -118,12 +129,30 @@ public static class AuthEndpoints
             Status = MembershipStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,
             ActivatedAt = DateTimeOffset.UtcNow,
-        });
+        };
+        database.Memberships.Add(membership);
+        var membershipEvent = new ActivityEvent
+        {
+            OrganizationId = organizationId,
+            ActorUserId = user.Id,
+            ActorName = user.DisplayName,
+            EventType = "membership_created",
+            Title = "Created organisation membership",
+            EntityType = "organization_membership",
+            EntityId = membership.Id.ToString(),
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        database.ActivityEvents.Add(membershipEvent);
         await database.SaveChangesAsync(cancellationToken);
+        await governance.VoidOpenGoalsForMembershipChangeAsync(
+            organizationId,
+            membershipEvent.Id,
+            user.Id,
+            cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
-        var confirmationLink = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}/api/auth/verify-email?userId={user.Id}&token={WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token))}";
+        var confirmationLink = BuildIdentityLink(configuration, httpContext.Request, "/verify-email", user.Id, token);
         await emailSender.SendConfirmationLinkAsync(user, email, confirmationLink);
 
         return Results.Created("/api/auth/session", new { requiresEmailVerification = true });
@@ -150,6 +179,27 @@ public static class AuthEndpoints
             : Results.Json(new ApiError("InvalidVerificationToken", "The confirmation link is invalid or expired."), statusCode: StatusCodes.Status400BadRequest);
     }
 
+    private static async Task<IResult> ResendVerificationAsync(
+        VerificationResendRequest request,
+        HttpContext httpContext,
+        IConfiguration configuration,
+        UserManager<ApplicationUser> userManager,
+        IEmailSender<ApplicationUser> emailSender)
+    {
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            var user = await userManager.FindByEmailAsync(request.Email.Trim());
+            if (user is { EmailConfirmed: false, Email: not null })
+            {
+                var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
+                var confirmationLink = BuildIdentityLink(configuration, httpContext.Request, "/verify-email", user.Id, token);
+                await emailSender.SendConfirmationLinkAsync(user, user.Email, confirmationLink);
+            }
+        }
+
+        return Results.NoContent();
+    }
+
     private static async Task<IResult> SignInAsync(
         SignInRequest request,
         UserManager<ApplicationUser> userManager,
@@ -162,7 +212,7 @@ public static class AuthEndpoints
         }
 
         var user = await userManager.FindByEmailAsync(request.Email.Trim());
-        if (user is null || !await userManager.CheckPasswordAsync(user, request.Password))
+        if (user is null)
         {
             return Results.Json(new ApiError("InvalidCredentials", "The email or password is incorrect."), statusCode: StatusCodes.Status401Unauthorized);
         }
@@ -181,17 +231,23 @@ public static class AuthEndpoints
             return Results.Json(new ApiError("NoActiveOrganization", "No active organisation membership is available."), statusCode: StatusCodes.Status403Forbidden);
         }
 
-        await signInManager.SignInWithClaimsAsync(user, isPersistent: false,
-        [
-            new Claim("organization_id", membership.OrganizationId.ToString()),
-            new Claim(ClaimTypes.Role, membership.Role.ToString()),
-        ]);
+        var signIn = await signInManager.PasswordSignInAsync(
+            user,
+            request.Password,
+            isPersistent: false,
+            lockoutOnFailure: true);
+        if (!signIn.Succeeded)
+        {
+            return Results.Json(new ApiError("InvalidCredentials", "The email or password is incorrect."), statusCode: StatusCodes.Status401Unauthorized);
+        }
+
         return Results.NoContent();
     }
 
     private static async Task<IResult> StartPasswordRecoveryAsync(
         PasswordRecoveryRequest request,
         HttpContext httpContext,
+        IConfiguration configuration,
         UserManager<ApplicationUser> userManager,
         IEmailSender<ApplicationUser> emailSender)
     {
@@ -201,7 +257,7 @@ public static class AuthEndpoints
             if (user is { EmailConfirmed: true, Email: not null })
             {
                 var token = await userManager.GeneratePasswordResetTokenAsync(user);
-                var resetLink = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}/api/auth/password-reset?userId={user.Id}&token={WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token))}";
+                var resetLink = BuildIdentityLink(configuration, httpContext.Request, "/password-reset", user.Id, token);
                 await emailSender.SendPasswordResetLinkAsync(user, user.Email, resetLink);
             }
         }
@@ -249,32 +305,61 @@ public static class AuthEndpoints
             return Results.Unauthorized();
         }
 
+        var organizationClaim = httpContext.User.FindFirstValue("organization_id");
+        if (!Guid.TryParse(organizationClaim, out var organizationId))
+        {
+            return Results.Unauthorized();
+        }
+
         var membership = await database.Memberships
-            .Where(candidate => candidate.UserId == user.Id && candidate.Status == MembershipStatus.Active)
+            .Where(candidate =>
+                candidate.UserId == user.Id &&
+                candidate.OrganizationId == organizationId &&
+                candidate.Status == MembershipStatus.Active)
             .Join(database.Organizations,
                 membership => membership.OrganizationId,
                 organization => organization.Id,
                 (membership, organization) => new { membership, organization })
-            .OrderBy(candidate => candidate.membership.CreatedAt)
-            .FirstOrDefaultAsync();
+            .SingleOrDefaultAsync();
         if (membership is null)
         {
             return Results.Json(new ApiError("NoActiveOrganization", "No active organisation membership is available."), statusCode: StatusCodes.Status403Forbidden);
         }
 
         return Results.Ok(new AuthSession(
+            membership.membership.Id,
             new AuthSessionUser(user.Id, user.Email!, user.DisplayName ?? user.UserName!),
             new AuthSessionOrganization(membership.organization.Id, membership.organization.Name, membership.membership.Role.ToString()),
             CapabilityPolicy.For(membership.membership.Role).OrderBy(capability => capability).ToArray()));
+    }
+
+    private static string BuildIdentityLink(
+        IConfiguration configuration,
+        HttpRequest request,
+        string path,
+        Guid userId,
+        string token)
+    {
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+        return WebLinkBuilder.Build(
+            configuration,
+            request,
+            path,
+            new Dictionary<string, string?>
+            {
+                ["userId"] = userId.ToString(),
+                ["token"] = encodedToken,
+            });
     }
 }
 
 public sealed record RegisterRequest(string? Email, string? Password, string? DisplayName, string? OrganizationName, string? InvitationToken = null);
 public sealed record VerifyEmailRequest(string? UserId, string? Token);
+public sealed record VerificationResendRequest(string? Email);
 public sealed record SignInRequest(string? Email, string? Password);
 public sealed record PasswordRecoveryRequest(string? Email);
 public sealed record PasswordResetRequest(string? UserId, string? Token, string? NewPassword);
 public sealed record ApiError(string Code, string Message);
-public sealed record AuthSession(AuthSessionUser User, AuthSessionOrganization ActiveOrganization, string[] Capabilities);
+public sealed record AuthSession(Guid MembershipId, AuthSessionUser User, AuthSessionOrganization ActiveOrganization, string[] Capabilities);
 public sealed record AuthSessionUser(Guid Id, string Email, string DisplayName);
 public sealed record AuthSessionOrganization(Guid Id, string Name, string Role);

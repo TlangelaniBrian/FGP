@@ -1,11 +1,17 @@
+from uuid import UUID
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from main import app
 from routers import feasibility
+from services.tariffs import default_tariffs
 
-client = TestClient(app)
+client = TestClient(
+    app,
+    headers={"Authorization": "Bearer test-worker-service-token"},
+)
 
 VALID_PAYLOAD = {
     "address": "123 Test St, Midrand",
@@ -15,6 +21,7 @@ VALID_PAYLOAD = {
     "price": 980000,
     "unit_type": "bachelor",
     "target_units": 8,
+    "organization_id": "11111111-1111-1111-1111-111111111111",
 }
 
 
@@ -25,6 +32,21 @@ def test_feasibility_returns_result():
     assert isinstance(data["viable"], bool)
     assert 0 <= data["score"] <= 100
     assert data["cost_total"] > 0
+
+
+def test_feasibility_loads_tariffs_for_private_organization_context(monkeypatch):
+    calls = []
+
+    def load_for_organization(year, organization_id):
+        calls.append((year, organization_id))
+        return default_tariffs(year)
+
+    monkeypatch.setattr(feasibility, "load_tariffs", load_for_organization)
+
+    resp = client.post("/analyze/feasibility", json=VALID_PAYLOAD)
+
+    assert resp.status_code == 200
+    assert calls == [(2026, UUID(VALID_PAYLOAD["organization_id"]))]
 
 
 def test_feasibility_invalid_municipality():

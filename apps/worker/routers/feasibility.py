@@ -1,6 +1,7 @@
 from __future__ import annotations  # enables X | Y syntax on Python 3.9
 
 from typing import Any, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
@@ -37,6 +38,7 @@ class FeasibilityRequest(BaseModel):
     target_units: int = Field(..., ge=1, le=200)
     zone_rules: ZoneRulesInput | None = None
     tariff_year: int = Field(default=2026, ge=2024, le=2030)
+    organization_id: UUID
 
     @field_validator("zone_code")
     @classmethod
@@ -94,7 +96,7 @@ async def analyze_feasibility(
 
     # DB-backed tariffs for the requested year, falling back to constants.
     try:
-        tariffs = load_tariffs(body.tariff_year)
+        tariffs = load_tariffs(body.tariff_year, body.organization_id)
     except TariffValidationError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 

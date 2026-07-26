@@ -188,6 +188,22 @@ public sealed class SchemaMigrationTests
         Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'capital_goal_one_open_per_organization_idx')"));
     }
 
+    [Fact]
+    public async Task Capital_governance_hardening_migration_adds_versioned_contributions_and_audit_events()
+    {
+        await using var database = new PostgreSqlBuilder().WithImage("postgis/postgis:15-3.4").Build();
+        await database.StartAsync();
+        await FgpMigrator.ApplyAsync(database.GetConnectionString());
+        await using var connection = new NpgsqlConnection(database.GetConnectionString());
+        await connection.OpenAsync();
+
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT to_regclass('public.capital_governance_audit_events') IS NOT NULL"));
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'capital_contributions' AND column_name = 'root_contribution_id' AND is_nullable = 'YES')"));
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'capital_contributions_current_idx')"));
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'capital_contributions_current_root_idx')"));
+        Assert.True(await ScalarAsync<bool>(connection, "SELECT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'capital_governance_audit_events_immutable')"));
+    }
+
     private static async Task<T> ScalarAsync<T>(NpgsqlConnection connection, string commandText)
     {
         await using var command = new NpgsqlCommand(commandText, connection);

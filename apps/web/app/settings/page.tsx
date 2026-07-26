@@ -3,21 +3,54 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { actorHeaders } from "@/lib/portal-client";
-import { usePortalActor } from "@/lib/portal-actor";
 import {
   DEFAULT_PORTAL_SETTINGS,
   portalSettingsSchema,
   type PortalSettings,
 } from "@/lib/portal-settings";
-import { can, type Role } from "@/lib/portal-state";
+import { type Role } from "@/lib/portal-state";
+import { RequireSession } from "../_components/RequireSession";
+import { useSession } from "@/lib/session-context";
 
 type Member = {
-  id: number;
+  id: string;
+  userId: string;
   email: string;
   name: string;
   role: Role;
   status: string;
 };
+
+type OrganizationMemberDto = {
+  id: string;
+  userId: string;
+  email: string;
+  displayName: string | null;
+  role: Role;
+  status: string;
+};
+
+const MANAGED_ROLES: Role[] = [
+  "Chairperson",
+  "Treasurer",
+  "Analyst",
+  "Viewer",
+];
+
+function toMember(dto: OrganizationMemberDto): Member {
+  return {
+    id: dto.id,
+    userId: dto.userId,
+    email: dto.email,
+    name: dto.displayName?.trim() || dto.email,
+    role: dto.role,
+    status: dto.status,
+  };
+}
+
+function hasStatus(member: Member, status: string) {
+  return member.status.toLowerCase() === status.toLowerCase();
+}
 
 type SourceKey = keyof PortalSettings["scrapers"];
 type SourceStatus = {
@@ -83,13 +116,21 @@ function responseError(body: unknown, fallback: string) {
   ) {
     return body.error;
   }
+  if (
+    typeof body === "object" &&
+    body !== null &&
+    "message" in body &&
+    typeof body.message === "string"
+  ) {
+    return body.message;
+  }
   return fallback;
 }
 
-export default function SettingsPage() {
-  const actor = usePortalActor();
-  const canEditSettings = can(actor?.role ?? "Viewer", "settings");
-  const canEditTeam = can(actor?.role ?? "Viewer", "team");
+function SettingsContent() {
+  const { capabilities } = useSession();
+  const canEditSettings = capabilities.includes("ManageTeam");
+  const canEditTeam = capabilities.includes("ManageTeam");
   const [settings, setSettings] = useState<PortalSettings>(() => ({
     ...DEFAULT_PORTAL_SETTINGS,
     scrapers: { ...DEFAULT_PORTAL_SETTINGS.scrapers },
@@ -101,7 +142,6 @@ export default function SettingsPage() {
     DEFAULT_SOURCE_STATUSES,
   );
   const [invite, setInvite] = useState({
-    name: "",
     email: "",
     role: "Viewer" as Role,
   });
@@ -139,10 +179,12 @@ export default function SettingsPage() {
 
     async function loadMembers() {
       try {
-        const response = await fetch("/api/team");
+        const response = await fetch("/api/organizations/members");
         const body: unknown = await response.json().catch(() => null);
         if (!response.ok || !Array.isArray(body)) return;
-        if (active) setMembers(body as Member[]);
+        if (active) {
+          setMembers((body as OrganizationMemberDto[]).map(toMember));
+        }
       } catch {
         // Settings remain usable if the team panel cannot refresh.
       }
@@ -256,10 +298,10 @@ export default function SettingsPage() {
 
   async function inviteMember(event: React.FormEvent) {
     event.preventDefault();
-    const response = await fetch("/api/team", {
+    const response = await fetch("/api/organizations/invitations", {
       method: "POST",
       headers: actorHeaders(),
-      body: JSON.stringify(invite),
+      body: JSON.stringify({ email: invite.email, role: invite.role }),
     });
     const body = await response.json();
     if (!response.ok) {
@@ -269,30 +311,27 @@ export default function SettingsPage() {
       });
       return;
     }
-    setMembers((items) => [
-      body,
-      ...items.filter((item) => item.id !== body.id),
-    ]);
-    setInvite({ name: "", email: "", role: "Viewer" });
+    setInvite({ email: "", role: "Viewer" });
     setNotice({
       kind: "success",
-      text: `Invite recorded for ${body.email}.`,
+      text: `Invitation sent to ${body.email}.`,
     });
   }
 
   async function updateMember(
-    id: number,
+    id: string,
     patch: { role?: Role; status?: string },
   ) {
-    const response = await fetch("/api/team", {
+    const response = await fetch(`/api/organizations/members/${id}`, {
       method: "PATCH",
       headers: actorHeaders(),
-      body: JSON.stringify({ id, ...patch }),
+      body: JSON.stringify(patch),
     });
     const body = await response.json();
     if (response.ok) {
+      const member = toMember(body as OrganizationMemberDto);
       setMembers((items) =>
-        items.map((item) => (item.id === id ? body : item)),
+        items.map((item) => (item.id === id ? member : item)),
       );
     } else {
       setNotice({
@@ -304,15 +343,16 @@ export default function SettingsPage() {
 
   async function removeMember(member: Member) {
     if (!window.confirm(`Remove ${member.name} from this workspace?`)) return;
-    const response = await fetch("/api/team", {
-      method: "DELETE",
+    const response = await fetch(`/api/organizations/members/${member.id}`, {
+      method: "PATCH",
       headers: actorHeaders(),
-      body: JSON.stringify({ id: member.id }),
+      body: JSON.stringify({ status: "Removed" }),
     });
     const body = await response.json();
     if (response.ok) {
+      const updated = toMember(body as OrganizationMemberDto);
       setMembers((items) =>
-        items.map((item) => (item.id === member.id ? body : item)),
+        items.map((item) => (item.id === member.id ? updated : item)),
       );
       setNotice({
         kind: "success",
@@ -339,13 +379,15 @@ export default function SettingsPage() {
             pipeline.
           </p>
         </div>
-        <button
-          className="button button-primary"
-          onClick={saveSettings}
-          disabled={loadingSettings || savingSettings || !canEditSettings}
-        >
-          {savingSettings ? "Saving…" : "Save settings"}
-        </button>
+        {canEditSettings && (
+          <button
+            className="button button-primary"
+            onClick={saveSettings}
+            disabled={loadingSettings || savingSettings}
+          >
+            {savingSettings ? "Saving…" : "Save settings"}
+          </button>
+        )}
       </div>
 
       {notice && (
@@ -382,20 +424,25 @@ export default function SettingsPage() {
                 <strong>Auto-score new leads</strong>
                 <small>Run spatial checks as soon as a lead is imported.</small>
               </span>
-              <button
-                type="button"
-                className={`toggle ${settings.autoAnalyze ? "on" : ""}`}
-                aria-label="Auto-score new leads"
-                aria-pressed={settings.autoAnalyze}
-                onClick={() => toggleSetting("autoAnalyze")}
-                disabled={!canEditSettings}
-              >
-                <i />
-              </button>
+              {canEditSettings ? (
+                <button
+                  type="button"
+                  className={`toggle ${settings.autoAnalyze ? "on" : ""}`}
+                  aria-label="Auto-score new leads"
+                  aria-pressed={settings.autoAnalyze}
+                  onClick={() => toggleSetting("autoAnalyze")}
+                >
+                  <i />
+                </button>
+              ) : (
+                <span className="tag">
+                  {settings.autoAnalyze ? "Enabled" : "Off"}
+                </span>
+              )}
             </div>
             <div style={{ padding: "14px 0" }}>
               <div className="split">
-                <label htmlFor="settings-alert-threshold">
+                <span>
                   <strong style={{ fontSize: 13 }}>Alert threshold</strong>
                   <small
                     className="muted"
@@ -403,33 +450,34 @@ export default function SettingsPage() {
                   >
                     Only alert the team for high-signal opportunities.
                   </small>
-                </label>
+                </span>
                 <strong className="status-value">
                   {settings.scoreThreshold}
                 </strong>
               </div>
-              <input
-                id="settings-alert-threshold"
-                aria-label="Alert threshold"
-                type="range"
-                min={50}
-                max={95}
-                step={1}
-                value={settings.scoreThreshold}
-                onChange={(event) => {
-                  setSettings((current) => ({
-                    ...current,
-                    scoreThreshold: Number(event.target.value),
-                  }));
-                  setNotice(null);
-                }}
-                style={{
-                  width: "100%",
-                  marginTop: 14,
-                  accentColor: "var(--blue)",
-                }}
-                disabled={!canEditSettings}
-              />
+              {canEditSettings && (
+                <input
+                  id="settings-alert-threshold"
+                  aria-label="Alert threshold"
+                  type="range"
+                  min={50}
+                  max={95}
+                  step={1}
+                  value={settings.scoreThreshold}
+                  onChange={(event) => {
+                    setSettings((current) => ({
+                      ...current,
+                      scoreThreshold: Number(event.target.value),
+                    }));
+                    setNotice(null);
+                  }}
+                  style={{
+                    width: "100%",
+                    marginTop: 14,
+                    accentColor: "var(--blue)",
+                  }}
+                />
+              )}
             </div>
           </section>
 
@@ -444,16 +492,21 @@ export default function SettingsPage() {
                   <strong>{notification.label}</strong>
                   <small>{notification.detail}</small>
                 </span>
-                <button
-                  type="button"
-                  className={`toggle ${settings[notification.key] ? "on" : ""}`}
-                  aria-label={notification.label}
-                  aria-pressed={settings[notification.key]}
-                  onClick={() => toggleSetting(notification.key)}
-                  disabled={!canEditSettings}
-                >
-                  <i />
-                </button>
+                {canEditSettings ? (
+                  <button
+                    type="button"
+                    className={`toggle ${settings[notification.key] ? "on" : ""}`}
+                    aria-label={notification.label}
+                    aria-pressed={settings[notification.key]}
+                    onClick={() => toggleSetting(notification.key)}
+                  >
+                    <i />
+                  </button>
+                ) : (
+                  <span className="tag">
+                    {settings[notification.key] ? "On" : "Off"}
+                  </span>
+                )}
               </div>
             ))}
           </section>
@@ -483,16 +536,21 @@ export default function SettingsPage() {
                   >
                     {source.status === "not_run" ? "Not run" : source.status}
                   </span>
-                  <button
-                    type="button"
-                    className={`toggle ${settings.scrapers[source.source] ? "on" : ""}`}
-                    aria-label={`${source.label} scraper`}
-                    aria-pressed={settings.scrapers[source.source]}
-                    onClick={() => toggleScraper(source.source)}
-                    disabled={!canEditSettings}
-                  >
-                    <i />
-                  </button>
+                  {canEditSettings ? (
+                    <button
+                      type="button"
+                      className={`toggle ${settings.scrapers[source.source] ? "on" : ""}`}
+                      aria-label={`${source.label} scraper`}
+                      aria-pressed={settings.scrapers[source.source]}
+                      onClick={() => toggleScraper(source.source)}
+                    >
+                      <i />
+                    </button>
+                  ) : (
+                    <span className="tag">
+                      {settings.scrapers[source.source] ? "On" : "Off"}
+                    </span>
+                  )}
                 </span>
               </div>
             ))}
@@ -507,7 +565,7 @@ export default function SettingsPage() {
                 </h2>
               </div>
               <span className="tag tag-blue">
-                {members.filter((member) => member.status !== "removed").length} members
+                {members.filter((member) => !hasStatus(member, "Removed")).length} members
               </span>
             </div>
             {canEditTeam ? (
@@ -517,16 +575,6 @@ export default function SettingsPage() {
                   className="form-grid"
                   style={{ marginTop: 16 }}
                 >
-                  <input
-                    className="field"
-                    aria-label="Member name"
-                    placeholder="Full name"
-                    value={invite.name}
-                    onChange={(event) =>
-                      setInvite({ ...invite, name: event.target.value })
-                    }
-                    required
-                  />
                   <input
                     className="field"
                     aria-label="Member email"
@@ -546,11 +594,9 @@ export default function SettingsPage() {
                       setInvite({ ...invite, role: event.target.value as Role })
                     }
                   >
-                    {["Owner", "Chairperson", "Treasurer", "Analyst", "Viewer"].map(
-                      (role) => (
-                        <option key={role}>{role}</option>
-                      ),
-                    )}
+                    {MANAGED_ROLES.map((role) => (
+                      <option key={role}>{role}</option>
+                    ))}
                   </select>
                   <button className="button button-secondary" type="submit">
                     Invite member
@@ -565,8 +611,11 @@ export default function SettingsPage() {
                       </small>
                     </span>
                     <span className="split">
-                      {member.status !== "removed" && (
-                        <>
+                      {!hasStatus(member, "Removed") &&
+                        (member.role === "Owner" ? (
+                          <span className="tag">Owner</span>
+                        ) : (
+                          <>
                           <select
                             className="field"
                             aria-label={`Role for ${member.name}`}
@@ -578,11 +627,9 @@ export default function SettingsPage() {
                               })
                             }
                           >
-                            {["Owner", "Chairperson", "Treasurer", "Analyst", "Viewer"].map(
-                              (role) => (
-                                <option key={role}>{role}</option>
-                              ),
-                            )}
+                            {MANAGED_ROLES.map((role) => (
+                              <option key={role}>{role}</option>
+                            ))}
                           </select>
                           <button
                             className="button button-quiet button-danger"
@@ -590,13 +637,15 @@ export default function SettingsPage() {
                             onClick={() =>
                               updateMember(member.id, {
                                 status:
-                                  member.status === "suspended"
-                                    ? "active"
-                                    : "suspended",
+                                  hasStatus(member, "Suspended")
+                                    ? "Active"
+                                    : "Suspended",
                               })
                             }
                           >
-                            {member.status === "suspended" ? "Restore" : "Suspend"}
+                            {hasStatus(member, "Suspended")
+                              ? "Restore"
+                              : "Suspend"}
                           </button>
                           <button
                             className="button button-quiet"
@@ -605,8 +654,8 @@ export default function SettingsPage() {
                           >
                             Remove
                           </button>
-                        </>
-                      )}
+                          </>
+                        ))}
                     </span>
                   </div>
                 ))}
@@ -635,5 +684,13 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <RequireSession pathname="/settings">
+      <SettingsContent />
+    </RequireSession>
   );
 }
