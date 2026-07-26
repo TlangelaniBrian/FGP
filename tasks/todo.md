@@ -56,6 +56,20 @@
 - The legacy `/api/capital` POST multiplexer remains temporarily because the current capital page still uses that compatibility contract; its server-side active-membership check remains enforced.
 - No deployment, Azure provisioning, external import, or source-data classification was performed.
 
+### Follow-up review
+
+- [x] Close the pre-auth sign-in enumeration and preserve Identity lockout behavior.
+- [x] Make duplicate registration return the same neutral success status/body as first registration.
+- [x] Add deterministic membership ordering, deadlock retry coverage, bounded cache sweeping, and an explicit worker-client dependency.
+- [x] Migrate one PostGIS test template and clone isolated per-test databases with deterministic process-exit cleanup.
+
+### Review
+
+- The focused auth suite passed 10/10, including wrong-password email-confirmation non-disclosure and 429 `AccountLocked` behavior.
+- The full API suite passed 116/116 and worker tests passed 47/47.
+- Web lint, typecheck, production build, Compose validation, and the removed-database-path security smoke all passed.
+- No deployment, Azure provisioning, external import, or source-data classification was performed.
+
 ## Task 3 remediation
 
 - [x] Capture a failing multi-membership capability test that selects the authenticated `organization_id`.

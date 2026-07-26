@@ -66,6 +66,10 @@ public sealed class HttpWorkerClientTests
             Options.Create(new WorkerOptions
             {
                 ServiceToken = "test-worker-service-token",
+            }),
+            Options.Create(new AnalysisEndpointOptions
+            {
+                EndpointTimeoutMilliseconds = 8_000,
             }));
 
     private static HttpClient CreateClient(HttpMessageHandler handler) =>

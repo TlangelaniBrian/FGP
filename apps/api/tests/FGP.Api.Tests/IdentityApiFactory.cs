@@ -20,14 +20,27 @@ namespace FGP.Api.Tests;
 
 public sealed class IdentityApiFactory : WebApplicationFactory<global::Program>, IAsyncDisposable
 {
+    private const string TemplateDatabaseName = "fgp_test_template";
     private static readonly PostgreSqlContainer SharedDatabase = new PostgreSqlBuilder()
         .WithImage("postgis/postgis:15-3.4")
         .Build();
     private static readonly SemaphoreSlim SharedDatabaseLock = new(1, 1);
     private static bool _sharedDatabaseStarted;
+    private static bool _templateDatabaseInitialized;
     private readonly TimeSpan? _analysisEndpointTimeout;
     private readonly string _databaseName = $"fgp_test_{Guid.NewGuid():N}";
     private string _connectionString = string.Empty;
+
+    static IdentityApiFactory()
+    {
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            if (_sharedDatabaseStarted)
+            {
+                SharedDatabase.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        };
+    }
 
     public TestIdentityEmailSender EmailSender { get; } = new();
     public TestWorkerClient WorkerClient { get; } = new();
@@ -42,8 +55,15 @@ public sealed class IdentityApiFactory : WebApplicationFactory<global::Program>,
     {
         var factory = new IdentityApiFactory(analysisEndpointTimeout);
         await EnsureSharedDatabaseStartedAsync();
-        await factory.CreateDatabaseAsync();
-        await FgpMigrator.ApplyAsync(factory._connectionString);
+        await SharedDatabaseLock.WaitAsync();
+        try
+        {
+            await factory.CreateDatabaseAsync();
+        }
+        finally
+        {
+            SharedDatabaseLock.Release();
+        }
         return factory;
     }
 
@@ -57,6 +77,13 @@ public sealed class IdentityApiFactory : WebApplicationFactory<global::Program>,
                 await SharedDatabase.StartAsync();
                 _sharedDatabaseStarted = true;
             }
+
+            if (!_templateDatabaseInitialized)
+            {
+                await CreateDatabaseAsync(TemplateDatabaseName);
+                await FgpMigrator.ApplyAsync(BuildConnectionString(TemplateDatabaseName, pooling: false));
+                _templateDatabaseInitialized = true;
+            }
         }
         finally
         {
@@ -66,16 +93,26 @@ public sealed class IdentityApiFactory : WebApplicationFactory<global::Program>,
 
     private async Task CreateDatabaseAsync()
     {
+        await CreateDatabaseAsync(_databaseName, useTemplate: true);
+        _connectionString = BuildConnectionString(_databaseName);
+    }
+
+    private static async Task CreateDatabaseAsync(string databaseName, bool useTemplate = false)
+    {
         var adminConnectionString = SharedDatabase.GetConnectionString();
         await using var connection = new NpgsqlConnection(adminConnectionString);
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand($"CREATE DATABASE \"{_databaseName}\"", connection);
+        var templateClause = useTemplate ? $" TEMPLATE \"{TemplateDatabaseName}\"" : string.Empty;
+        await using var command = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"{templateClause}", connection);
         await command.ExecuteNonQueryAsync();
-        _connectionString = new NpgsqlConnectionStringBuilder(adminConnectionString)
-        {
-            Database = _databaseName,
-        }.ConnectionString;
     }
+
+    private static string BuildConnectionString(string databaseName, bool pooling = true) =>
+        new NpgsqlConnectionStringBuilder(SharedDatabase.GetConnectionString())
+        {
+            Database = databaseName,
+            Pooling = pooling,
+        }.ConnectionString;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

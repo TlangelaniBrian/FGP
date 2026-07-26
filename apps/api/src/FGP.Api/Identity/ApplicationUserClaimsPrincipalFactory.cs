@@ -21,6 +21,7 @@ public sealed class ApplicationUserClaimsPrincipalFactory(
             .AsNoTracking()
             .Where(candidate => candidate.UserId == user.Id && candidate.Status == MembershipStatus.Active)
             .OrderBy(candidate => candidate.CreatedAt)
+            .ThenBy(candidate => candidate.Id)
             .FirstOrDefaultAsync();
 
         if (membership is not null)

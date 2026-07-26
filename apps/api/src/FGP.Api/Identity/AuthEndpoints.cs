@@ -78,9 +78,7 @@ public static class AuthEndpoints
         {
             if (createResult.Errors.Any(error => error.Code is "DuplicateUserName" or "DuplicateEmail"))
             {
-                return Results.Json(
-                    new ApiError("RegistrationUnavailable", "Unable to create this account."),
-                    statusCode: StatusCodes.Status409Conflict);
+                return Results.Created("/api/auth/session", new { requiresEmailVerification = true });
             }
 
             return Results.ValidationProblem(createResult.Errors
@@ -217,6 +215,20 @@ public static class AuthEndpoints
             return Results.Json(new ApiError("InvalidCredentials", "The email or password is incorrect."), statusCode: StatusCodes.Status401Unauthorized);
         }
 
+        var passwordCheck = await signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
+        if (passwordCheck.IsLockedOut)
+        {
+            return Results.Json(new ApiError("AccountLocked", "Too many attempts. Try again later."), statusCode: StatusCodes.Status429TooManyRequests);
+        }
+
+        // RequireConfirmedEmail makes CheckPasswordSignInAsync return NotAllowed before
+        // checking the password. Verify explicitly so an unverified account still gets
+        // EmailUnverified only for the correct password.
+        if (!passwordCheck.Succeeded && !await userManager.CheckPasswordAsync(user, request.Password))
+        {
+            return Results.Json(new ApiError("InvalidCredentials", "The email or password is incorrect."), statusCode: StatusCodes.Status401Unauthorized);
+        }
+
         if (!user.EmailConfirmed)
         {
             return Results.Json(new ApiError("EmailUnverified", "Confirm your email before signing in."), statusCode: StatusCodes.Status403Forbidden);
@@ -225,22 +237,14 @@ public static class AuthEndpoints
         var membership = await database.Memberships
             .Where(candidate => candidate.UserId == user.Id && candidate.Status == MembershipStatus.Active)
             .OrderBy(candidate => candidate.CreatedAt)
+            .ThenBy(candidate => candidate.Id)
             .FirstOrDefaultAsync();
         if (membership is null)
         {
             return Results.Json(new ApiError("NoActiveOrganization", "No active organisation membership is available."), statusCode: StatusCodes.Status403Forbidden);
         }
 
-        var signIn = await signInManager.PasswordSignInAsync(
-            user,
-            request.Password,
-            isPersistent: false,
-            lockoutOnFailure: true);
-        if (!signIn.Succeeded)
-        {
-            return Results.Json(new ApiError("InvalidCredentials", "The email or password is incorrect."), statusCode: StatusCodes.Status401Unauthorized);
-        }
-
+        await signInManager.SignInAsync(user, isPersistent: false);
         return Results.NoContent();
     }
 

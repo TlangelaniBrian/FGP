@@ -38,11 +38,6 @@ public sealed class HttpWorkerClient : IWorkerClient
     private readonly string _serviceToken;
     private readonly TimeSpan _workerTimeout;
 
-    public HttpWorkerClient(HttpClient client, IOptions<WorkerOptions> options)
-        : this(client, options, Options.Create(new AnalysisEndpointOptions()))
-    {
-    }
-
     public HttpWorkerClient(HttpClient client, IOptions<WorkerOptions> options, IOptions<AnalysisEndpointOptions> endpointOptions)
     {
         _client = client;

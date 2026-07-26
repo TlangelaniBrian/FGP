@@ -468,7 +468,7 @@ public sealed class GovernanceService(FgpDbContext database)
     {
         for (var current = exception; current is not null; current = current.InnerException)
         {
-            if (current is PostgresException { SqlState: "40001" })
+            if (current is PostgresException { SqlState: "40001" or "40P01" })
             {
                 return true;
             }

@@ -5,6 +5,7 @@ using FGP.Api.Organizations;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using System.Text;
 using Xunit;
@@ -35,7 +36,7 @@ public sealed class AccountLifecycleTests
     }
 
     [Fact]
-    public async Task Register_uses_a_neutral_response_for_an_existing_email()
+    public async Task Register_uses_a_neutral_success_response_for_an_existing_email()
     {
         await using var app = await IdentityApiFactory.CreateAsync();
         var client = app.CreateClient();
@@ -50,9 +51,9 @@ public sealed class AccountLifecycleTests
         Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/auth/register", request)).StatusCode);
         var duplicate = await client.PostAsJsonAsync("/api/auth/register", request);
 
-        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
-        var body = await duplicate.Content.ReadFromJsonAsync<ApiError>();
-        Assert.Equal("RegistrationUnavailable", body!.Code);
+        Assert.Equal(HttpStatusCode.Created, duplicate.StatusCode);
+        using var body = JsonDocument.Parse(await duplicate.Content.ReadAsStringAsync());
+        Assert.True(body.RootElement.GetProperty("requiresEmailVerification").GetBoolean());
     }
 
     [Fact]
@@ -77,6 +78,29 @@ public sealed class AccountLifecycleTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<ApiError>();
         Assert.Equal("EmailUnverified", body!.Code);
+    }
+
+    [Fact]
+    public async Task Sign_in_does_not_disclose_email_confirmation_for_a_wrong_password()
+    {
+        await using var app = await IdentityApiFactory.CreateAsync();
+        var client = app.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", new
+        {
+            email = "owner@example.test",
+            password = "CorrectHorseBatteryStaple1!",
+            displayName = "Owner Example",
+            organizationName = "Example Club",
+        });
+
+        var response = await client.PostAsJsonAsync("/api/auth/sign-in", new
+        {
+            email = "owner@example.test",
+            password = "WrongPassword1!",
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("InvalidCredentials", (await response.Content.ReadFromJsonAsync<ApiError>())!.Code);
     }
 
     [Fact]
@@ -133,7 +157,11 @@ public sealed class AccountLifecycleTests
                 email = "owner@example.test",
                 password = "WrongPassword1!",
             });
-            Assert.Equal(HttpStatusCode.Unauthorized, failed.StatusCode);
+            Assert.Equal(attempt < 4 ? HttpStatusCode.Unauthorized : HttpStatusCode.TooManyRequests, failed.StatusCode);
+            if (attempt == 4)
+            {
+                Assert.Equal("AccountLocked", (await failed.Content.ReadFromJsonAsync<ApiError>())!.Code);
+            }
         }
 
         var locked = await client.PostAsJsonAsync("/api/auth/sign-in", new
@@ -142,8 +170,8 @@ public sealed class AccountLifecycleTests
             password = "CorrectHorseBatteryStaple1!",
         });
 
-        Assert.Equal(HttpStatusCode.Unauthorized, locked.StatusCode);
-        Assert.Equal("InvalidCredentials", (await locked.Content.ReadFromJsonAsync<ApiError>())!.Code);
+        Assert.Equal(HttpStatusCode.TooManyRequests, locked.StatusCode);
+        Assert.Equal("AccountLocked", (await locked.Content.ReadFromJsonAsync<ApiError>())!.Code);
     }
 
     [Fact]

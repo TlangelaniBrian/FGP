@@ -280,9 +280,6 @@ def load_tariffs(
     """
     now = time.time()
     cache_key = (organization_id, year)
-    expired_keys = [key for key, (timestamp, _) in _cache.items() if now - timestamp >= _CACHE_TTL]
-    for key in expired_keys:
-        _cache.pop(key, None)
     if use_cache and cache_key in _cache:
         ts, cached = _cache[cache_key]
         if now - ts < _CACHE_TTL:
@@ -302,6 +299,12 @@ def load_tariffs(
         raise TariffValidationError(f"tariff bundle for {year} is unavailable")
     result = tariffs_from_rows(year, rows) if rows else default_tariffs(year)
     if use_cache:
+        if len(_cache) >= _CACHE_MAX_ENTRIES:
+            expired_keys = [
+                key for key, (timestamp, _) in _cache.items() if now - timestamp >= _CACHE_TTL
+            ]
+            for key in expired_keys:
+                _cache.pop(key, None)
         if len(_cache) >= _CACHE_MAX_ENTRIES:
             oldest_key = min(_cache, key=lambda key: _cache[key][0])
             _cache.pop(oldest_key, None)
