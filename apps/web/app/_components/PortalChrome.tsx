@@ -8,8 +8,8 @@ import {
   type ColourMode,
   type VisualDirection,
 } from "@/lib/portal-state";
-import { apiFetch } from "@/lib/api-client";
 import { usePortalActor } from "@/lib/portal-actor";
+import { useSession } from "@/lib/session-context";
 import { PortalIcon } from "./PortalIcon";
 
 const labels: Record<string, string> = {
@@ -28,13 +28,17 @@ type PortalChromeProps = {
 export function PortalChrome({ colourMode, visualDirection, appearanceReady, onColourModeChange, onVisualDirectionChange }: PortalChromeProps) {
   const pathname = usePathname();
   const actor = usePortalActor();
+  const session = useSession();
   const [open, setOpen] = useState<"user" | "notifications" | null>(null);
   const [activities, setActivities] = useState<Array<{ title: string; detail: string | null; createdAt: string | null }>>([]);
   const crumb = labels[pathname] ?? (pathname.startsWith("/projects/") ? "Project detail" : "Portal");
 
   useEffect(() => { fetch("/api/activity").then((response) => response.ok ? response.json() : []).then(setActivities).catch(() => setActivities([])); }, []);
 
-  async function signOut() { await apiFetch("/api/auth/sign-out", { method: "POST" }); window.location.href = "/login"; }
+  async function signOut() {
+    await session.signOut();
+    window.location.href = "/sign-in";
+  }
 
   return (
     <>

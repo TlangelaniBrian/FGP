@@ -4,9 +4,7 @@ import "material-symbols/rounded.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 import { AppShell } from "./_components/AppShell";
-import { db, projects } from "@fgp/database";
-import { desc, sql } from "drizzle-orm";
-import { getAuthenticatedActor } from "@/lib/portal-auth";
+import { SessionProvider } from "@/lib/session-context";
 import {
   COLOUR_MODES,
   COLOUR_MODE_PREFERENCE_KEY,
@@ -40,16 +38,13 @@ const preferenceBootstrap = `(() => {
   document.documentElement.dataset.dir = readPreference(${JSON.stringify(VISUAL_DIRECTION_PREFERENCE_KEY)}, ${JSON.stringify(VISUAL_DIRECTIONS)}, "classic");
 })();`;
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  let projectRows: { id: number; name: string | null; status: string | null }[] = [];
-  let actor = null;
-  try {
-    actor = await getAuthenticatedActor();
-    if (actor) projectRows = await db.select({ id: projects.id, name: projects.name, status: projects.status }).from(projects).where(sql`${projects.userId} = ${actor.userId}`).orderBy(desc(projects.createdAt)).limit(20);
-  } catch {}
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return <html lang="en" className={nunito.variable} data-mode="light" data-dir="classic" suppressHydrationWarning>
     <head><script dangerouslySetInnerHTML={{ __html: preferenceBootstrap }} /></head>
-    <body><AppShell actor={actor} projects={projectRows.map((project) => ({ id: project.id, name: project.name ?? "Untitled project", status: project.status ?? "planning" }))}>{children}</AppShell></body>
+    <body>
+      <SessionProvider>
+        <AppShell projects={[]}>{children}</AppShell>
+      </SessionProvider>
+    </body>
   </html>;
 }

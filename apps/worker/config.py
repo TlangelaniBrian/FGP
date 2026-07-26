@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
     tariff_year: int = 2026
     scraper_headless: bool = True
+    worker_service_token: str = ""
 
 
 settings = Settings()

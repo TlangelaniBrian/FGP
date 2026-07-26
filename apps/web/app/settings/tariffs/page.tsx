@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { can } from "@/lib/portal-state";
 import { actorHeaders } from "@/lib/portal-client";
-import { usePortalActor } from "@/lib/portal-actor";
+import { useSession } from "@/lib/session-context";
+import { RequireSession } from "../../_components/RequireSession";
+import { TariffActions } from "./_components/TariffActions";
 
 const CATEGORIES = [
   { key: "build_rates", label: "Build rates", hint: "R/m² by unit type" },
@@ -27,9 +28,9 @@ const CATEGORIES = [
 
 type CatKey = (typeof CATEGORIES)[number]["key"];
 
-export default function TariffsAdminPage() {
-  const actor = usePortalActor();
-  const canEdit = can(actor?.role ?? "Viewer", "tariff");
+function TariffsAdminContent() {
+  const { activeOrganization, capabilities } = useSession();
+  const canEdit = capabilities.includes("EditTariffs");
   const [year, setYear] = useState(2026);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -145,8 +146,8 @@ export default function TariffsAdminPage() {
             fontWeight: 800,
           }}
         >
-          Tariffs are locked for {actor?.role ?? "this account"}. Contact a
-          Treasurer, Chairperson, or Owner to make changes.
+          Tariffs are locked for {activeOrganization?.role ?? "this account"}.
+          Contact a Chairperson or Owner to make changes.
         </div>
       )}
 
@@ -195,13 +196,11 @@ export default function TariffsAdminPage() {
               className={`${field} resize-y`}
             />
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => save(key)}
-                disabled={!canEdit || saving === key}
-                className="bg-accent-blue text-white font-mono text-xs font-semibold px-4 py-1.5 rounded-card disabled:opacity-50 hover:opacity-90 portal-transition"
-              >
-                {saving === key ? "Saving…" : "Save"}
-              </button>
+              <TariffActions
+                capabilities={capabilities}
+                disabled={saving === key}
+                onSave={() => save(key)}
+              />
               {status[key] && (
                 <span
                   className={`font-mono text-xs ${
@@ -217,5 +216,13 @@ export default function TariffsAdminPage() {
           </div>
         ))}
     </div>
+  );
+}
+
+export default function TariffsAdminPage() {
+  return (
+    <RequireSession pathname="/settings/tariffs">
+      <TariffsAdminContent />
+    </RequireSession>
   );
 }

@@ -38,6 +38,7 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
     public DbSet<CapitalGoalApproval> CapitalGoalApprovals => Set<CapitalGoalApproval>();
     public DbSet<CapitalCorrectionProposal> CapitalCorrectionProposals => Set<CapitalCorrectionProposal>();
     public DbSet<CapitalCorrectionApproval> CapitalCorrectionApprovals => Set<CapitalCorrectionApproval>();
+    public DbSet<GovernanceAuditEvent> GovernanceAuditEvents => Set<GovernanceAuditEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -297,11 +298,17 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
         {
             entity.ToTable("tariffs");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.OrganizationId).HasColumnName("organization_id");
             entity.Property(x => x.TariffYear).HasColumnName("tariff_year");
             entity.Property(x => x.Data).HasColumnType("jsonb");
             entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
-            entity.HasIndex(x => new { x.TariffYear, x.Category }).IsUnique();
+            entity.HasIndex(x => new { x.OrganizationId, x.TariffYear, x.Category })
+                .IsUnique()
+                .HasDatabaseName("tariffs_organization_year_category_key");
             entity.HasIndex(x => x.TariffYear).HasDatabaseName("tariffs_year_idx");
+            entity.HasIndex(x => new { x.OrganizationId, x.TariffYear })
+                .HasDatabaseName("tariffs_organization_id_tariff_year_idx");
+            entity.HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 
@@ -390,12 +397,36 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
 
     private static void ConfigureCapitalFund(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<CapitalContribution>().ToTable("capital_contributions").HasKey(x => x.Id);
+        modelBuilder.Entity<CapitalContribution>(entity =>
+        {
+            entity.ToTable("capital_contributions");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.OrganizationId, x.IsCurrent, x.ContributionDate });
+            entity.HasOne<CapitalContribution>()
+                .WithMany()
+                .HasForeignKey(x => x.RootContributionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<CapitalContribution>()
+                .WithMany()
+                .HasForeignKey(x => x.SupersedesContributionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Membership>().WithMany().HasForeignKey(x => x.MemberId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.RecordedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<CapitalGoalProposal>().ToTable("capital_goal_proposals").HasKey(x => x.Id);
         modelBuilder.Entity<CapitalGoalElectorate>().ToTable("capital_goal_electorate").HasKey(x => new { x.ProposalId, x.MembershipId });
         modelBuilder.Entity<CapitalGoalApproval>().ToTable("capital_goal_approvals").HasKey(x => new { x.ProposalId, x.MembershipId });
         modelBuilder.Entity<CapitalCorrectionProposal>().ToTable("capital_correction_proposals").HasKey(x => x.Id);
         modelBuilder.Entity<CapitalCorrectionApproval>().ToTable("capital_correction_approvals").HasKey(x => new { x.ProposalId, x.ApproverMembershipId });
+        modelBuilder.Entity<GovernanceAuditEvent>(entity =>
+        {
+            entity.ToTable("capital_governance_audit_events");
+            entity.HasKey(x => x.Id);
+            entity.HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne<ActivityEvent>().WithMany().HasForeignKey(x => x.MembershipEventId).OnDelete(DeleteBehavior.Restrict);
+        });
     }
 
     private static void ConfigureTenantOwnership(ModelBuilder modelBuilder)
@@ -430,7 +461,10 @@ public sealed class FgpDbContext(DbContextOptions<FgpDbContext> options) : Ident
 
             foreach (var property in entity.GetProperties())
             {
-                property.SetColumnName(ToSnakeCase(property.Name));
+                if (string.Equals(property.GetColumnName(), property.Name, StringComparison.Ordinal))
+                {
+                    property.SetColumnName(ToSnakeCase(property.Name));
+                }
             }
         }
     }

@@ -8,8 +8,9 @@ a code deploy for every rate change they live in the `tariffs` DB table
 with a short in-process cache and falls back to the constants below when the DB
 is unavailable, so feasibility results never break on a transient DB outage.
 
-The constants here MUST mirror scripts/seed/seed_tariffs.ts for TARIFF_YEAR=2026
-so behaviour is identical before and after migrating to the DB.
+The constants here MUST mirror the organization-scoped rows seeded by
+apps/api/src/FGP.Api/Data/Seed/ReferenceDataSeeder.cs for TARIFF_YEAR=2026 so
+behaviour is identical before and after migrating to the DB.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 log = logging.getLogger("fgp.tariffs")
 
@@ -261,25 +263,32 @@ def tariffs_from_rows(year: int, rows: dict[str, Any]) -> Tariffs:
 
 # --- Loader with cache + graceful fallback ---------------------------------------
 _CACHE_TTL = 300.0  # seconds — tariffs change rarely; refresh every 5 minutes
-_cache: dict[int, tuple[float, Tariffs]] = {}
+_CACHE_MAX_ENTRIES = 512
+_cache: dict[tuple[UUID, int], tuple[float, Tariffs]] = {}
 
 
-def load_tariffs(year: int = 2026, *, use_cache: bool = True) -> Tariffs:
-    """Load tariffs for `year` from the DB, falling back to constants.
+def load_tariffs(
+    year: int,
+    organization_id: UUID,
+    *,
+    use_cache: bool = True,
+) -> Tariffs:
+    """Load one organization's tariffs for `year`, falling back to constants.
 
     Never raises: a DB outage or missing rows yields the 2026 fallback so the
     feasibility endpoint stays available.
     """
     now = time.time()
-    if use_cache and year in _cache:
-        ts, cached = _cache[year]
+    cache_key = (organization_id, year)
+    if use_cache and cache_key in _cache:
+        ts, cached = _cache[cache_key]
         if now - ts < _CACHE_TTL:
             return cached
 
     try:
         from db import fetch_tariff_rows
 
-        rows = fetch_tariff_rows(year)
+        rows = fetch_tariff_rows(year, organization_id)
     except Exception as e:  # noqa: BLE001 — fallback path must catch everything
         if year != FALLBACK_TARIFF_YEAR:
             raise TariffValidationError(f"tariff bundle for {year} is unavailable") from e
@@ -290,7 +299,16 @@ def load_tariffs(year: int = 2026, *, use_cache: bool = True) -> Tariffs:
         raise TariffValidationError(f"tariff bundle for {year} is unavailable")
     result = tariffs_from_rows(year, rows) if rows else default_tariffs(year)
     if use_cache:
-        _cache[year] = (now, result)
+        if len(_cache) >= _CACHE_MAX_ENTRIES:
+            expired_keys = [
+                key for key, (timestamp, _) in _cache.items() if now - timestamp >= _CACHE_TTL
+            ]
+            for key in expired_keys:
+                _cache.pop(key, None)
+        if len(_cache) >= _CACHE_MAX_ENTRIES:
+            oldest_key = min(_cache, key=lambda key: _cache[key][0])
+            _cache.pop(oldest_key, None)
+        _cache[cache_key] = (now, result)
     return result
 
 

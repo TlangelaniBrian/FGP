@@ -6,6 +6,7 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { useFeasibilityStore } from "@/lib/feasibility-store";
 import { apiFetch } from "@/lib/api-client";
+import { RequireSession } from "../_components/RequireSession";
 
 // Pull a human-readable message out of whatever the API returned. The
 // feasibility route may return a string error (worker text), a Zod flatten
@@ -40,7 +41,7 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export default function EvaluatePage() {
+function EvaluateContent() {
   const router = useRouter();
   const setResult = useFeasibilityStore((s) => s.setResult);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -178,5 +179,13 @@ export default function EvaluatePage() {
         </button>
       </form>
     </div>
+  );
+}
+
+export default function EvaluatePage() {
+  return (
+    <RequireSession pathname="/evaluate">
+      <EvaluateContent />
+    </RequireSession>
   );
 }

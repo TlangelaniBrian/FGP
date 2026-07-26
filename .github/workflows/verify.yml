@@ -1,0 +1,37 @@
+name: verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: latest
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: dotnet test apps/api/tests/FGP.Api.Tests/FGP.Api.Tests.csproj
+      - run: uv run --directory apps/worker --extra dev pytest
+      - name: Reject removed database dependencies
+        run: |
+          if rg -n -i 'supabase|drizzle|@fgp/database|SUPABASE_|auth\.uid\(\)' apps packages scripts; then
+            echo "Removed database dependencies remain in runtime or tooling paths" >&2
+            exit 1
+          fi

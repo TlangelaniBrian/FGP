@@ -5,11 +5,15 @@ import type { Role } from "./portal-state";
 
 export type PortalActor = {
   userId: string;
-  memberId: number;
+  memberId: number | string;
   email: string;
   name: string;
   initials: string;
   role: Role;
+};
+
+export type LegacyPortalActor = Omit<PortalActor, "memberId"> & {
+  memberId: number;
 };
 
 const PortalActorContext = createContext<PortalActor | null>(null);

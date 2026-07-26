@@ -63,13 +63,74 @@ public sealed class AuthorizationPolicyTests
         });
         await database.SaveChangesAsync();
 
-        var ownerResult = await authorization.AuthorizeAsync(PrincipalFor(owner!.Id), null, Capabilities.CoSignFinancial);
-        var treasurerResult = await authorization.AuthorizeAsync(PrincipalFor(treasurer.Id), null, Capabilities.CoSignFinancial);
+        var ownerResult = await authorization.AuthorizeAsync(
+            PrincipalFor(owner!.Id, ownerMembership.OrganizationId),
+            null,
+            Capabilities.CoSignFinancial);
+        var treasurerResult = await authorization.AuthorizeAsync(
+            PrincipalFor(treasurer.Id, ownerMembership.OrganizationId),
+            null,
+            Capabilities.CoSignFinancial);
 
         Assert.True(ownerResult.Succeeded);
         Assert.False(treasurerResult.Succeeded);
     }
 
-    private static ClaimsPrincipal PrincipalFor(Guid userId) =>
-        new(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "test"));
+    [Fact]
+    public async Task Capability_authorization_uses_the_authenticated_organization_membership()
+    {
+        await using var app = await IdentityApiFactory.CreateAsync();
+        var client = app.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", new
+        {
+            email = "member@example.test",
+            password = "CorrectHorseBatteryStaple1!",
+            displayName = "Member Example",
+            organizationName = "First Organization",
+        });
+
+        using var scope = app.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<FGP.Api.Data.FgpDbContext>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var authorization = scope.ServiceProvider.GetRequiredService<IAuthorizationService>();
+        var member = await users.FindByEmailAsync("member@example.test");
+        var ownerMembership = database.Memberships.Single(candidate => candidate.UserId == member!.Id);
+        var secondOrganization = new Organization
+        {
+            Id = Guid.NewGuid(),
+            Name = "Second Organization",
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        database.Organizations.Add(secondOrganization);
+        database.Memberships.Add(new Membership
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = secondOrganization.Id,
+            UserId = member!.Id,
+            Role = OrganizationRole.Treasurer,
+            Status = MembershipStatus.Active,
+            CreatedAt = ownerMembership.CreatedAt.AddMinutes(1),
+            ActivatedAt = ownerMembership.ActivatedAt?.AddMinutes(1),
+        });
+        await database.SaveChangesAsync();
+
+        var firstOrganization = await authorization.AuthorizeAsync(
+            PrincipalFor(member.Id, ownerMembership.OrganizationId),
+            null,
+            Capabilities.CoSignFinancial);
+        var secondOrganizationResult = await authorization.AuthorizeAsync(
+            PrincipalFor(member.Id, secondOrganization.Id),
+            null,
+            Capabilities.CoSignFinancial);
+
+        Assert.True(firstOrganization.Succeeded);
+        Assert.False(secondOrganizationResult.Succeeded);
+    }
+
+    private static ClaimsPrincipal PrincipalFor(Guid userId, Guid organizationId) =>
+        new(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim("organization_id", organizationId.ToString()),
+        ], "test"));
 }
