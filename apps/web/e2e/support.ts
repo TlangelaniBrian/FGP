@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-export const DEMO_PASSWORD = "Fgp-Demo-2026!Pass";
+export const DEMO_PASSWORD = "Fgp-Demo-2026!Pass"; // ggignore: deterministic demo-only credential
 
 export const FIVE_ROLES = [
   { role: "Owner", email: "owner@fgp.demo", editTariffs: true, manageTeam: true },
