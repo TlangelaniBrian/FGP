@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
@@ -14,7 +15,7 @@ public interface IWorkerClient
     Task<WorkerResponse> PostAsync<TRequest>(string path, TRequest request, CancellationToken cancellationToken);
 }
 
-public sealed record WorkerResponse(HttpStatusCode StatusCode, string Body);
+public sealed record WorkerResponse(HttpStatusCode StatusCode, string Body, byte[]? Content = null);
 
 public sealed class AnalysisEndpointOptions
 {
@@ -32,6 +33,7 @@ public sealed class HttpWorkerClient : IWorkerClient
     [
         "/analyze/parcel",
         "/analyze/feasibility",
+        "/forms/generate",
     ];
     private const string UnavailableBody = """{"detail":"Analysis service is temporarily unavailable."}""";
     private readonly HttpClient _client;
@@ -65,9 +67,11 @@ public sealed class HttpWorkerClient : IWorkerClient
             };
             message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _serviceToken);
             using var response = await _client.SendAsync(message, timeout.Token);
+            var content = await response.Content.ReadAsByteArrayAsync(timeout.Token);
             return new WorkerResponse(
                 response.StatusCode,
-                await response.Content.ReadAsStringAsync(timeout.Token));
+                Encoding.UTF8.GetString(content),
+                content);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

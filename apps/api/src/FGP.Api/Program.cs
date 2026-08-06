@@ -7,6 +7,7 @@ using FGP.Api.Spatial;
 using FGP.Api.Tariffs;
 using FGP.Api.CapitalFund;
 using FGP.Api.Portal;
+using FGP.Api.Artifacts;
 using FGP.Api.Data.Seed;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics;
@@ -54,6 +55,10 @@ builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email
 builder.Services.AddScoped<SmtpIdentityEmailSender>();
 builder.Services.AddScoped<IEmailSender<ApplicationUser>>(services => services.GetRequiredService<SmtpIdentityEmailSender>());
 builder.Services.AddScoped<IOrganizationInvitationSender>(services => services.GetRequiredService<SmtpIdentityEmailSender>());
+builder.Services
+    .AddOptions<ArtifactStorageOptions>()
+    .Bind(builder.Configuration.GetSection("Artifacts"));
+builder.Services.AddSingleton<IArtifactStorage, LocalArtifactStorage>();
 builder.Services
     .AddOptions<WorkerOptions>()
     .Bind(builder.Configuration.GetSection("Worker"))

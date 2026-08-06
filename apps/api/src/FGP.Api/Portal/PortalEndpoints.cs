@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using FGP.Api.Artifacts;
 using FGP.Api.CapitalFund;
 using FGP.Api.Data;
 using FGP.Api.Data.Entities;
@@ -160,15 +161,97 @@ public static class PortalEndpoints
         return Results.Ok(document);
     }
 
-    private static async Task<IResult> DownloadDocumentAsync(long id, HttpContext http, FgpDbContext database, CancellationToken cancellationToken)
+    private static async Task<IResult> DownloadDocumentAsync(long id, HttpContext http, FgpDbContext database, IArtifactStorage artifacts, CancellationToken cancellationToken)
     {
         var actor = await ResolveActorAsync(http, database, cancellationToken);
         if (actor is null) return Results.Unauthorized();
         var document = await database.ComplianceDocuments.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id && item.OrganizationId == actor.OrganizationId, cancellationToken);
-        return document is null ? Results.NotFound(new { error = "document not found" }) : Results.NotFound(new { error = "document has not been generated" });
+        if (document is null) return Results.NotFound(new { error = "document not found" });
+        if (string.IsNullOrWhiteSpace(document.PdfUrl)) return Results.NotFound(new { error = "document has not been generated" });
+        var stream = await artifacts.OpenAsync(document.PdfUrl, cancellationToken);
+        return stream is null
+            ? Results.NotFound(new { error = "document has not been generated" })
+            : Results.File(stream, "application/pdf", fileDownloadName: $"{document.DocType}.pdf");
     }
 
-    private static Task<IResult> GenerateDocumentAsync(long id, HttpContext http, FgpDbContext database, CancellationToken cancellationToken) => Task.FromResult<IResult>(Results.StatusCode(StatusCodes.Status501NotImplemented));
+    private static async Task<IResult> GenerateDocumentAsync(long id, HttpContext http, FgpDbContext database, IWorkerClient worker, IArtifactStorage artifacts, CancellationToken cancellationToken)
+    {
+        var actor = await ResolveActorAsync(http, database, cancellationToken);
+        if (actor is null) return Results.Unauthorized();
+        var document = await database.ComplianceDocuments.SingleOrDefaultAsync(item => item.Id == id && item.OrganizationId == actor.OrganizationId, cancellationToken);
+        if (document is null) return Results.NotFound(new { error = "document not found" });
+
+        var context = await BuildDocumentContextAsync(database, actor.OrganizationId, document, cancellationToken);
+        var workerResponse = await worker.PostAsync("/forms/generate", new { doc_type = document.DocType, context }, cancellationToken);
+        if ((int)workerResponse.StatusCode is < 200 or >= 300 || workerResponse.Content is not { Length: > 0 })
+        {
+            return Results.Json(new { error = "Document generation failed" }, statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        var key = $"documents/{actor.OrganizationId:N}/{document.Id}.pdf";
+        await artifacts.SaveAsync(key, workerResponse.Content, cancellationToken);
+        document.PdfUrl = key;
+        document.Status = "ready";
+        await database.SaveChangesAsync(cancellationToken);
+        return Results.Ok(document);
+    }
+
+    private static async Task<Dictionary<string, object?>> BuildDocumentContextAsync(FgpDbContext database, Guid organizationId, ComplianceDocument document, CancellationToken cancellationToken)
+    {
+        var context = new Dictionary<string, object?>();
+        if (document.PrefilledData is not null)
+        {
+            foreach (var property in document.PrefilledData.RootElement.EnumerateObject())
+            {
+                context[property.Name] = property.Value.ValueKind == JsonValueKind.String
+                    ? property.Value.GetString()
+                    : property.Value.Clone();
+            }
+        }
+        void Fallback(string key, object? value)
+        {
+            if (!context.ContainsKey(key) && value is not null)
+            {
+                context[key] = value;
+            }
+        }
+        if (document.ListingId is long listingId)
+        {
+            var listing = await database.Listings.AsNoTracking().SingleOrDefaultAsync(item => item.Id == listingId && item.OrganizationId == organizationId, cancellationToken);
+            if (listing is not null)
+            {
+                Fallback("address", listing.Address);
+                Fallback("municipality", listing.Municipality);
+                Fallback("suburb", listing.Suburb);
+                Fallback("zone_code", listing.ZoneCode);
+                Fallback("dolomite_risk", listing.DolomiteRisk);
+                Fallback("parcel_id", listing.ParcelId);
+                if (listing.ParcelId is long parcelId)
+                {
+                    var parcel = await database.Parcels.AsNoTracking().SingleOrDefaultAsync(item => item.Id == parcelId, cancellationToken);
+                    if (parcel is not null)
+                    {
+                        Fallback("erf_number", parcel.ErfNumber);
+                        Fallback("township", parcel.Township);
+                        Fallback("size_sqm", parcel.SizeSqm);
+                    }
+                }
+                if (!string.IsNullOrWhiteSpace(listing.ZoneCode))
+                {
+                    var zone = await database.ZoningSchemeRules.AsNoTracking().SingleOrDefaultAsync(item => item.Municipality == listing.Municipality && item.ZoneCode == listing.ZoneCode, cancellationToken);
+                    if (zone is not null)
+                    {
+                        Fallback("zone_label", zone.ZoneLabel);
+                        Fallback("coverage_pct", zone.CoveragePct);
+                        Fallback("far", zone.Far);
+                        Fallback("max_storeys", zone.MaxStoreys);
+                    }
+                }
+            }
+        }
+        return context;
+    }
+
 
     private static async Task<IResult> GetSettingsAsync(HttpContext http, FgpDbContext database, CancellationToken cancellationToken)
     {
