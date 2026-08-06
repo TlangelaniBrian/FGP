@@ -7,7 +7,7 @@ namespace FGP.Api.Data.Seed;
 
 public static class RoleUserSeeder
 {
-    public const string DemoPassword = "Fgp-Demo-2026!Pass";
+    public const string DemoPassword = "Fgp-Demo-2026!Pass"; // ggignore: deterministic demo-only credential
 
     public static readonly IReadOnlyList<(OrganizationRole Role, string Email, string DisplayName)> DemoUsers =
     [
