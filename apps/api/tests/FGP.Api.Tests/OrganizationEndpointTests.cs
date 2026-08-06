@@ -129,6 +129,31 @@ public sealed class OrganizationEndpointTests
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Members_list_returns_own_organization_members_ordered_by_email()
+    {
+        await using var app = await IdentityApiFactory.CreateAsync();
+        var client = app.CreateClient();
+        await RegisterConfirmAndSignInAsync(client, app);
+        var invitation = await client.PostAsJsonAsync("/api/organizations/invitations", new
+        {
+            email = "chairperson@example.test",
+            role = "Chairperson",
+        });
+        Assert.Equal(HttpStatusCode.Created, invitation.StatusCode);
+        await RegisterConfirmAndSignInInvitationAsync(client, app, "chairperson@example.test");
+
+        var response = await client.GetAsync("/api/organizations/members");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var members = await response.Content.ReadFromJsonAsync<List<MemberResponse>>();
+        Assert.NotNull(members);
+        Assert.Collection(
+            members!,
+            member => Assert.Equal("chairperson@example.test", member.Email),
+            member => Assert.Equal("owner@example.test", member.Email));
+    }
+
     private static async Task RegisterConfirmAndSignInAsync(HttpClient client, IdentityApiFactory app)
     {
         await client.PostAsJsonAsync("/api/auth/register", new

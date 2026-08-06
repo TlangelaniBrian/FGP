@@ -91,10 +91,16 @@ public static class OrganizationEndpoints
             .Join(database.Users.AsNoTracking(),
                 membership => membership.UserId,
                 user => user.Id,
-                (membership, user) => new MemberResponse(membership.Id, membership.UserId, user.Email!, user.DisplayName, membership.Role.ToString(), membership.Status.ToString()))
-            .OrderBy(member => member.Email)
-            .ToListAsync(cancellationToken);
-        return Results.Ok(members);
+                (membership, user) => new { membership, user })
+            .OrderBy(item => item.user.Email)
+            .Select(item => new MemberResponse(
+                item.membership.Id,
+                item.membership.UserId,
+                item.user.Email!,
+                item.user.DisplayName,
+                item.membership.Role.ToString(),
+                item.membership.Status.ToString()))
+            .ToListAsync(cancellationToken);        return Results.Ok(members);
     }
 
     private static async Task<IResult> GetMemberAsync(
