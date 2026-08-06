@@ -44,3 +44,7 @@ supabase/.temp
 docs/plans/
 docs/superpowers/
 memory/
+
+# Design handoff and legacy pre-.NET mockups
+docs/design_handoff_fgp_portal/
+first-gen-properties-mockup.jsx
