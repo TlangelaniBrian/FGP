@@ -13,9 +13,9 @@ public static class DemoSpatialDataSeeder
     {
         var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(4326);
         database.Amenities.RemoveRange(await database.Amenities.Where(item => item.Source == "demo").ToListAsync(cancellationToken));
-        database.DolomiteZones.RemoveRange(await database.DolomiteZones.Where(item => item.CgsReference != null && item.CgsReference.StartsWith("DEMO-", StringComparison.Ordinal)).ToListAsync(cancellationToken));
+        database.DolomiteZones.RemoveRange(await database.DolomiteZones.Where(item => item.CgsReference != null && item.CgsReference.StartsWith("DEMO-")).ToListAsync(cancellationToken));
         database.ZoningDesignations.RemoveRange(await database.ZoningDesignations.Where(item => item.SourceUrl == "demo").ToListAsync(cancellationToken));
-        database.Parcels.RemoveRange(await database.Parcels.Where(item => item.ErfNumber.StartsWith("DEMO ERF", StringComparison.Ordinal)).ToListAsync(cancellationToken));
+        database.Parcels.RemoveRange(await database.Parcels.Where(item => item.ErfNumber.StartsWith("DEMO ERF")).ToListAsync(cancellationToken));
         await database.SaveChangesAsync(cancellationToken);
 
         AddParcel(database, geometryFactory, "DEMO ERF 14201", "Soshanguve South Ext 13", "tshwane", 1024, 28.085, -25.54);
