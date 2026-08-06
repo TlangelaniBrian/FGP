@@ -1,0 +1,6 @@
+version: 2
+
+secrets:
+  ignored_paths:
+    - "apps/api/src/FGP.Api/Data/Seed/RoleUserSeeder.cs"
+    - "apps/web/e2e/support.ts"

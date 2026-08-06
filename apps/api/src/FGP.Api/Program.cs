@@ -115,7 +115,9 @@ if (args.Contains("--seed-demo", StringComparer.Ordinal))
     }
     await using var seedScope = app.Services.CreateAsyncScope();
     var seedDatabase = seedScope.ServiceProvider.GetRequiredService<FgpDbContext>();
+    var userManager = seedScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
     await seedDatabase.Database.MigrateAsync();
+    await RoleUserSeeder.SeedAsync(seedDatabase, userManager, seedOrganizationId);
     await ReferenceDataSeeder.SeedAsync(seedDatabase, seedOrganizationId);
     await DemoSpatialDataSeeder.SeedAsync(seedDatabase);
     return;
