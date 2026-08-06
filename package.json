@@ -10,7 +10,8 @@
     "test:web": "pnpm --filter web run test --run",
     "test:api": "./scripts/run-api-tests.sh",
     "test:worker": "cd apps/worker && uv run --extra dev pytest",
-    "test:security-regression": "node scripts/security-regression-smoke.mjs"
+    "test:security-regression": "node scripts/security-regression-smoke.mjs",
+    "acceptance": "bash scripts/acceptance/run-acceptance.sh"
   },
   "engines": {
     "node": ">=20",
