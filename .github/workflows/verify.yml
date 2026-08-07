@@ -31,7 +31,16 @@ jobs:
       - run: uv run --directory apps/worker --extra dev pytest
       - name: Reject removed database dependencies
         run: |
-          if rg -n -i 'supabase|drizzle|@fgp/database|SUPABASE_|auth\.uid\(\)' apps packages scripts; then
+          # Scan the whole tracked tree, not just apps/scripts: the pre-.NET
+          # Supabase variables survived in .env.production.example because the
+          # old path list never reached the repository root.
+          # Prose is excluded: the migration history legitimately names what was
+          # removed. This guard is about runtime and configuration paths.
+          if rg -n -i \
+              --glob '!pnpm-lock.yaml' \
+              --glob '!.github/workflows/verify.yml' \
+              --glob '!*.md' \
+              'supabase|drizzle|@fgp/database|SUPABASE_|auth\.uid\(\)' .; then
             echo "Removed database dependencies remain in runtime or tooling paths" >&2
             exit 1
           fi

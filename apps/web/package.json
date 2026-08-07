@@ -11,8 +11,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@fgp/geo": "workspace:*",
-    "@fgp/ui": "workspace:*",
     "@hookform/resolvers": "^5.4.0",
     "maplibre-gl": "4.7.1",
     "material-symbols": "^0.45.7",

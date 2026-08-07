@@ -25,10 +25,6 @@ __pycache__/
 .docker/
 /artifacts/
 
-# Supabase
-supabase/.branches
-supabase/.temp
-
 # OS
 .DS_Store
 *.swp
@@ -45,6 +41,7 @@ docs/plans/
 docs/superpowers/
 memory/
 
-# Design handoff and legacy pre-.NET mockups
+# Design handoff bundle. Kept out of the repository because it embeds the
+# Capitec Payments Design System (third-party assets and fonts). Hold it
+# alongside the checkout; docs/architecture.md records what it specifies.
 docs/design_handoff_fgp_portal/
-first-gen-properties-mockup.jsx
