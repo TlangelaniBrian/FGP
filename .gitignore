@@ -24,6 +24,7 @@ __pycache__/
 # Docker volumes
 .docker/
 /artifacts/
+/.artifacts/
 
 # OS
 .DS_Store

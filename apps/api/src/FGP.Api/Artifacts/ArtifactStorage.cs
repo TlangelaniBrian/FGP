@@ -5,7 +5,15 @@ namespace FGP.Api.Artifacts;
 
 public sealed class ArtifactStorageOptions
 {
-    public string StoragePath { get; init; } = "artifacts";
+    /// <summary>
+    /// Where generated artifacts are written. Relative values resolve against the
+    /// process working directory, which for `dotnet run` is the project directory —
+    /// so this must not collide with a source folder. "artifacts" did: on a
+    /// case-insensitive filesystem it resolved onto FGP.Api/Artifacts/, dropping
+    /// generated PDFs into the source tree. The dot prefix keeps it distinct and
+    /// ignorable. Deployments set an absolute path.
+    /// </summary>
+    public string StoragePath { get; init; } = ".artifacts";
 }
 
 public interface IArtifactStorage

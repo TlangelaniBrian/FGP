@@ -73,6 +73,9 @@ services:
       Email__SmtpHost: mailpit
       Email__SmtpPort: 1025
       Web__PublicOrigin: http://localhost:3000
+      # Absolute, so generated PDFs never land next to the source regardless of
+      # the process working directory.
+      Artifacts__StoragePath: /workspace/.artifacts
     ports:
       - "8080:8080"
     volumes:
