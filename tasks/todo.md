@@ -96,3 +96,33 @@ half-delivered.
 - [x] Reseeded the local demo stack, verified the overwrite path, and removed the two
       pre-fix orphaned PDFs from `.artifacts/`.
 - [x] Full matrix re-run green; pushed to PR #38.
+
+## Current slice — #12: delete the `/api/team` stubs
+
+Scope per `docs/roadmap.md` Stage 0: remove the three `501` stub handlers, their route
+mappings, request records, and the now-unused `AllowedRoles` list. The functional
+`GET /api/team` stays; the static web permission map is a separate, non-Stage-0 slice.
+
+- [x] Verify live: POST/PATCH/DELETE `/api/team` return 501; no web callers; the
+      working path is `/api/organizations/members` (200 live).
+- [x] Delete the three stub handlers + mappings + `TeamMemberRequest`/`TeamUpdateRequest`
+      + `AllowedRoles`.
+- [x] Run focused API tests, then the full verification matrix.
+- [x] Restart the API and confirm the stubs no longer respond 501 while the replacement
+      paths still return 200.
+- [x] Open the PR and report the iteration.
+
+### Review
+
+Scope per `docs/roadmap.md` Stage 0 is the dead `/api/team` stubs only. The static web
+`permissions` map and `can(role, ...)` migration are part of the fuller #12 scope but
+are not Stage 0; they remain open for the phase-2 slice.
+
+- Verified live before editing: GET `/api/team` 200, POST/PATCH/DELETE 501, and the
+  replacement `GET /api/organizations/members` 200; no web or test references to the
+  stubs.
+- Deleted the three stub handlers, their route registrations, the request records, and
+  the now-unused `AllowedRoles` field. Kept the functional `GET /api/team`.
+- Full matrix green: web 32/32, API 131/131, worker 47/47; lint, typecheck, build pass.
+- After API restart, POST/PATCH/DELETE `/api/team` return 405 (no handler) instead of
+  501, `GET /api/team` and `/api/organizations/members` still 200.
