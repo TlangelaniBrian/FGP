@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { actorHeaders } from "@/lib/portal-client";
-import { can, formatZar } from "@/lib/portal-state";
+import { formatZar } from "@/lib/portal-state";
 import { usePortalActor } from "@/lib/portal-actor";
+import { useSession } from "@/lib/session-context";
 import { nextCapitalMilestone } from "@/lib/capital-milestones";
 
 type Contribution = {
@@ -42,7 +43,13 @@ type Governance = {
 };
 
 export default function CapitalPage() {
+  const { capabilities } = useSession();
   const actor = usePortalActor();
+  const canRecord = capabilities.includes("RecordContribution");
+  const canProposeGoal = capabilities.includes("ProposeFundGoal");
+  const canProposeCorrection = capabilities.includes("ProposeCorrection");
+  const canCoSignOperational = capabilities.includes("CoSignOperational");
+  const canCoSignFinancial = capabilities.includes("CoSignFinancial");
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [governance, setGovernance] = useState<Governance>({
     requiredMembers: [],
@@ -346,7 +353,7 @@ export default function CapitalPage() {
             the next build.
           </p>
         </div>
-        {can(actor?.role ?? "Viewer", "record") && (
+        {canRecord && (
           <button
             className="button button-primary"
             onClick={() => setShowRecord(true)}
@@ -435,7 +442,7 @@ export default function CapitalPage() {
                     <strong style={{ fontVariantNumeric: "tabular-nums" }}>
                       {formatZar(item.amount)}
                     </strong>
-                    {can(actor?.role ?? "Viewer", "proposal") && (
+                    {canProposeCorrection && (
                       <button
                         className="button button-quiet"
                         style={{
@@ -476,7 +483,7 @@ export default function CapitalPage() {
                       {proposal.approvals.length} co-signs
                     </small>
                   </span>
-                  {can(actor?.role ?? "Viewer", "cosign") &&
+                  {canCoSignFinancial &&
                     String(proposal.proposedByMemberId) !==
                       String(actor?.memberId) &&
                     !proposal.approvals.some(
@@ -517,7 +524,7 @@ export default function CapitalPage() {
                 />
               </div>
             </div>
-            {can(actor?.role ?? "Viewer", "proposal") && (
+            {canProposeGoal && (
               <form
                 onSubmit={proposeGoal}
                 style={{ marginTop: 18, display: "flex", gap: 8 }}
@@ -568,7 +575,7 @@ export default function CapitalPage() {
                     </div>
                   ))}
                 </div>
-                {can(actor?.role ?? "Viewer", "cosign") &&
+                {canCoSignOperational &&
                   !goalProposal.approvals.some(
                     (memberId) =>
                       String(memberId) === String(actor?.memberId),
@@ -645,7 +652,7 @@ export default function CapitalPage() {
           ))}
         </section>
       )}
-      {can(actor?.role ?? "Viewer", "record") && showRecord && (
+      {canRecord && showRecord && (
         <div className="modal-scrim" role="dialog" aria-modal="true">
           <form className="modal-card" onSubmit={recordContribution}>
             <div className="split">
@@ -691,7 +698,7 @@ export default function CapitalPage() {
           </form>
         </div>
       )}
-      {can(actor?.role ?? "Viewer", "proposal") && correctionFor && (
+      {canProposeCorrection && correctionFor && (
         <div className="modal-scrim" role="dialog" aria-modal="true">
           <form className="modal-card" onSubmit={proposeCorrection}>
             <div className="split">

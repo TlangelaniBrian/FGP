@@ -156,3 +156,22 @@ Local verification: `bash -n` and `docker compose config -q` pass; Playwright co
 CI on the final head (`9b78fca`): `verify` passed (2m37s), `acceptance` passed (2m53s)
 with all 10 Playwright specs actually running. GitGuardian still fails on the
 deterministic demo password — #31 owner dashboard action is the only remaining blocker.
+
+## Current slice — #15: complete role×page acceptance coverage (scraper/capital/zoning)
+
+PR #27 merged the five-role suite for settings and tariffs only. The scraper, capital,
+and zoning pages are still missing from the role matrix, so #15 stays open until every
+page asserts its `CapabilityPolicy` vectors.
+
+- [x] Extend `FIVE_ROLES` with the remaining `Capabilities.All` vectors.
+- [x] `scraper.spec.ts`: queue form vs read-only per `RecordContribution`; POST 201/403.
+- [x] `capital.spec.ts`: record/propose/correct controls per `RecordContribution`,
+      `ProposeFundGoal`, `ProposeCorrection`; API 403 matrix for every denied vector.
+- [x] `zoning.spec.ts`: status/package controls and document writes per
+      `RecordContribution`, against the seeded Soshanguve listing.
+- [x] Fix the capital page gating divergence the suite exposed: Chairperson is denied
+      `proposal` by the static web map but allowed by the API, so the goal/correction
+      controls were hidden; gate the page on session capabilities instead.
+- [x] Run lint/typecheck/build/test:web, then the local acceptance stack, then the
+      API and worker suites.
+- [x] Open the PR and report the iteration.

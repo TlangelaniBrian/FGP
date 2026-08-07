@@ -5,6 +5,8 @@ node_modules/
 dist/
 .turbo/
 package-lock.json
+apps/web/playwright-report/
+apps/web/test-results/
 
 # .NET build output
 bin/
