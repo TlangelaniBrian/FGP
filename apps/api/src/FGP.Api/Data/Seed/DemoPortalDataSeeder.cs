@@ -1,3 +1,4 @@
+using FGP.Api.Artifacts;
 using FGP.Api.CapitalFund;
 using FGP.Api.Data.Entities;
 using FGP.Api.Identity;
@@ -5,6 +6,8 @@ using FGP.Api.Organizations;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite;
 using NetTopologySuite.Geometries;
+using System.Text;
+using System.Text.Json;
 
 namespace FGP.Api.Data.Seed;
 
@@ -60,6 +63,7 @@ public static class DemoPortalDataSeeder
     public static async Task SeedAsync(
         FgpDbContext database,
         Guid organizationId,
+        IArtifactStorage artifacts,
         CancellationToken cancellationToken = default)
     {
         await ClearAsync(database, organizationId, cancellationToken);
@@ -134,7 +138,79 @@ public static class DemoPortalDataSeeder
 
         SeedProjectDetail(database, organizationId, projects);
         await SeedCapitalContributionsAsync(database, organizationId, cancellationToken);
+        await SeedComplianceDocumentAsync(database, artifacts, organizationId, listings[0].Id, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task SeedComplianceDocumentAsync(
+        FgpDbContext database,
+        IArtifactStorage artifacts,
+        Guid organizationId,
+        long listingId,
+        CancellationToken cancellationToken)
+    {
+        var lead = Leads[0];
+        var document = new ComplianceDocument
+        {
+            OrganizationId = organizationId,
+            ListingId = listingId,
+            DocType = "zoning_certificate",
+            Municipality = lead.Municipality,
+            Status = "ready",
+            PrefilledData = JsonDocument.Parse(JsonSerializer.Serialize(new
+            {
+                address = lead.Address,
+                municipality = lead.Municipality,
+                zoneCode = lead.ZoneCode,
+                dolomiteRisk = lead.DolomiteRisk,
+            })),
+            CreatedAt = SeedTimestamp,
+        };
+        database.ComplianceDocuments.Add(document);
+        await database.SaveChangesAsync(cancellationToken);
+
+        var key = $"documents/{organizationId:N}/{document.Id}.pdf";
+        await artifacts.SaveAsync(key, BuildDemoZoningPdf(), cancellationToken);
+        document.PdfUrl = key;
+    }
+
+    private static byte[] BuildDemoZoningPdf()
+    {
+        using var stream = new MemoryStream();
+        void Write(string text)
+        {
+            var bytes = Encoding.ASCII.GetBytes(text);
+            stream.Write(bytes);
+        }
+
+        Write("%PDF-1.4\n");
+
+        var streamContent = "BT /F1 12 Tf 72 770 Td (Demo zoning certificate - Erf 14201, Molefe Makinta Drive) Tj ET\n";
+        var objects = new[]
+        {
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            $"<< /Length {Encoding.ASCII.GetByteCount(streamContent)} >>\nstream\n{streamContent}endstream",
+        };
+
+        var offsets = new long[objects.Length];
+        for (var index = 0; index < objects.Length; index++)
+        {
+            offsets[index] = stream.Position;
+            Write($"{index + 1} 0 obj\n{objects[index]}\nendobj\n");
+        }
+
+        var xrefOffset = stream.Position;
+        Write($"xref\n0 {objects.Length + 1}\n");
+        Write("0000000000 65535 f \n");
+        foreach (var offset in offsets)
+        {
+            Write($"{offset:0000000000} 00000 n \n");
+        }
+        Write($"trailer\n<< /Size {objects.Length + 1} /Root 1 0 R >>\nstartxref\n{xrefOffset}\n%%EOF");
+        return stream.ToArray();
     }
 
     private static FeasibilityReport BuildReport(Guid organizationId, long listingId, LeadSeed lead)
