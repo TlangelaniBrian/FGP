@@ -44,16 +44,18 @@ for (const { role, email, editTariffs } of FIVE_ROLES) {
         page.getByRole("button", { name: "Save tariffs" }),
       ).toHaveCount(0);
       expect(
-        await apiStatus(page, "PUT", "/api/tariffs", {
-          year: 2026,
-          category: "build_rates",
-          data: {
-            bachelor: 13500,
-            "1bed": 14200,
-            "2bed": 15000,
-            luxury: 18500,
-          },
-        }),
+        (
+          await apiStatus(page, "PUT", "/api/tariffs", {
+            year: 2026,
+            category: "build_rates",
+            data: {
+              bachelor: 13500,
+              "1bed": 14200,
+              "2bed": 15000,
+              luxury: 18500,
+            },
+          })
+        ).status,
       ).toBe(403);
     }
   });

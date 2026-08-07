@@ -2,6 +2,11 @@ import { expect, type Page } from "@playwright/test";
 
 export const DEMO_PASSWORD = "Fgp-Demo-2026!Pass"; // ggignore: deterministic demo-only credential
 
+// This matrix asserts the current server-side CapabilityPolicy
+// (apps/api/src/FGP.Api/Identity/AuthorizationPolicies.cs), not a UI convenience
+// layer. It intentionally differs from the earlier design handoff for Treasurer
+// (editTariffs/manageTeam) and Chairperson (propose goal/correction); reconciling the
+// handoff with the policy is an owner decision tracked separately.
 export const FIVE_ROLES = [
   { role: "Owner", email: "owner@fgp.demo", editTariffs: true, manageTeam: true },
   {
@@ -39,11 +44,6 @@ export async function signIn(page: Page, email: string, password: string) {
   await expect(page.locator(".portal-page, .auth-card").first()).toBeVisible();
 }
 
-export async function signOut(page: Page) {
-  await page.goto("/sign-in");
-  await page.waitForLoadState("domcontentloaded");
-}
-
 export async function apiStatus(
   page: Page,
   method: string,
@@ -54,5 +54,5 @@ export async function apiStatus(
     method,
     data: body,
   });
-  return response.status();
+  return { status: response.status(), body: await response.text() };
 }

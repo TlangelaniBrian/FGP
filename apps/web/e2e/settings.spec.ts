@@ -41,7 +41,11 @@ for (const { role, email, manageTeam } of FIVE_ROLES) {
       await expect(saveButton).toHaveCount(0);
       await expect(autoScore).toHaveCount(0);
       expect(
-        await apiStatus(page, "PUT", "/api/settings", { autoAnalyze: false }),
+        (
+          await apiStatus(page, "PUT", "/api/settings", {
+            autoAnalyze: false,
+          })
+        ).status,
       ).toBe(403);
     }
   });
