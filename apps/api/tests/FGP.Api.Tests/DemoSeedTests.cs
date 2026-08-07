@@ -62,7 +62,8 @@ public sealed class DemoSeedTests
         Assert.All(
             memberships,
             membership => Assert.Single(
-                memberships.Where(candidate => candidate.UserId == membership.UserId)));
+                memberships,
+                candidate => candidate.UserId == membership.UserId));
     }
 
     [Fact]
