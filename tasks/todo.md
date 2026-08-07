@@ -189,5 +189,8 @@ source of truth.
       `LinkParcelForm` from `can(role, ...)` to session capabilities.
 - [x] Delete the static `team`, `permissions`, and `can` exports from
       `lib/portal-state.ts` (keep `Role` and preference helpers).
+- [x] Add `projects.spec.ts` and `scout.spec.ts` role-matrix coverage for the four
+      migrated components (`ProjectActions`, `ProjectDetailEditor`, `ThisWeek`,
+      `LinkParcelForm`) per the PR #41 review comment.
 - [x] Run lint/typecheck/build/test:web, then the acceptance stack, then API/worker.
 - [x] Open the PR and report the iteration.
