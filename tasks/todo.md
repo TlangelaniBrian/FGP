@@ -149,9 +149,10 @@ remains the only merge blocker after these fixes.
 
 ### Review
 
-Local verification before pushing: `bash -n` and `docker compose config -q` pass,
-Playwright collects all 10 specs, vitest now excludes `e2e/` (it previously swept the
-Playwright specs and also needed `configDefaults` to keep `node_modules` excluded),
-and the full matrix is green (web 32/32, API 131/131, worker 47/47, lint/typecheck/build).
-CI results to be confirmed on the pushed head; GitGuardian still requires the #31 owner
-dashboard action.
+Local verification: `bash -n` and `docker compose config -q` pass; Playwright collects
+10 specs; vitest excludes `e2e/` while keeping `configDefaults`; full matrix green
+(web 32/32, API 131/131, worker 47/47, lint/typecheck/build).
+
+CI on the final head (`9b78fca`): `verify` passed (2m37s), `acceptance` passed (2m53s)
+with all 10 Playwright specs actually running. GitGuardian still fails on the
+deterministic demo password — #31 owner dashboard action is the only remaining blocker.
