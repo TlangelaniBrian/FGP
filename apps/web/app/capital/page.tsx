@@ -382,7 +382,7 @@ export default function CapitalPage() {
           <span className="card-kicker">Members contributing</span>
           <div className="stat-value">
             {new Set(contributions.map((item) => item.member)).size} /{" "}
-            {governance.members.length || "—"}
+            {governance.requiredMembers.length || "—"}
           </div>
           <div className="stat-note">Active governing members</div>
         </div>

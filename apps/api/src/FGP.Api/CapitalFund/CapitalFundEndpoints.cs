@@ -71,7 +71,31 @@ public static class CapitalFundEndpoints
             goalResponse = new { id = proposal.Id, newAmount = proposal.NewAmount, approvals, proposedBy = proposal.ProposedByMembershipId, signatures };
         }
         var openCorrections = await database.CapitalCorrectionProposals.AsNoTracking().Where(item => item.OrganizationId == organizationId && item.Status == CapitalFundStatuses.Open).ToListAsync(cancellationToken);
-        return Results.Ok(new { contributions, goal, goalProposal = goalResponse, corrections = openCorrections, governance = new { requiredMembers = Array.Empty<object>(), members = Array.Empty<object>() } });
+        var activeMembers = await database.Memberships
+            .AsNoTracking()
+            .Where(member => member.OrganizationId == organizationId && member.Status == MembershipStatus.Active)
+            .Join(database.Users, member => member.UserId, user => user.Id, (member, user) => new
+            {
+                memberId = member.Id,
+                name = user.DisplayName ?? user.Email ?? "Member",
+                role = member.Role,
+                status = member.Status.ToString(),
+            })
+            .ToListAsync(cancellationToken);
+        // The fund-goal electorate is every active, non-Viewer member — the same rule
+        // GovernanceService applies when it records a proposal's submission electorate.
+        var members = activeMembers
+            .OrderBy(member => member.role)
+            .ThenBy(member => member.name, StringComparer.Ordinal)
+            .Select(member => new { member.memberId, member.name, role = member.role.ToString(), member.status })
+            .ToList();
+        var requiredMembers = activeMembers
+            .Where(member => member.role != OrganizationRole.Viewer)
+            .OrderBy(member => member.role)
+            .ThenBy(member => member.name, StringComparer.Ordinal)
+            .Select(member => new { member.memberId, member.name, role = member.role.ToString(), member.status })
+            .ToList();
+        return Results.Ok(new { contributions, goal, goalProposal = goalResponse, corrections = openCorrections, governance = new { requiredMembers, members } });
     }
 
     private static async Task<IResult> LegacyCapitalActionAsync(

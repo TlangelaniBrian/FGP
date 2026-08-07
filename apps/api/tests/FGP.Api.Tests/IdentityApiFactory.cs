@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using Testcontainers.PostgreSql;
 using System.Data.Common;
+using System.IO;
 using System.Net;
 using System.Text.Json;
 using System.Threading;
@@ -29,6 +30,10 @@ public sealed class IdentityApiFactory : WebApplicationFactory<global::Program>,
     private static bool _templateDatabaseInitialized;
     private readonly TimeSpan? _analysisEndpointTimeout;
     private readonly string _databaseName = $"fgp_test_{Guid.NewGuid():N}";
+    private readonly string _artifactPath = Path.Combine(
+        Path.GetTempPath(),
+        "fgp-test-artifacts",
+        Guid.NewGuid().ToString("N"));
     private string _connectionString = string.Empty;
 
     static IdentityApiFactory()
@@ -118,6 +123,7 @@ public sealed class IdentityApiFactory : WebApplicationFactory<global::Program>,
     {
         builder.UseSetting("ConnectionStrings:Fgp", _connectionString);
         builder.UseSetting("Worker:ServiceToken", "test-worker-service-token");
+        builder.UseSetting("Artifacts:StoragePath", _artifactPath);
         if (_analysisEndpointTimeout is not null)
         {
             builder.UseSetting(
@@ -153,6 +159,10 @@ public sealed class IdentityApiFactory : WebApplicationFactory<global::Program>,
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{_databaseName}\" WITH (FORCE)", connection);
             await command.ExecuteNonQueryAsync();
+        }
+        if (Directory.Exists(_artifactPath))
+        {
+            Directory.Delete(_artifactPath, recursive: true);
         }
     }
 }

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using FGP.Api.Artifacts;
 using FGP.Api.CapitalFund;
 using FGP.Api.Data;
 using FGP.Api.Data.Entities;
@@ -62,7 +63,7 @@ public static class PortalEndpoints
             fundTotal = contributions.Sum(item => item.Amount),
             pipelineValue = listings.Sum(item => item.Price ?? 0),
             latestProject = projects.FirstOrDefault() is { } latest ? ProjectSummary(latest) : null,
-            topListing = listings.OrderByDescending(item => item.FeasibilityScore).ThenByDescending(item => item.CreatedAt).Select(ListingResponse).FirstOrDefault(),
+            topListing = listings.OrderByDescending(item => item.FeasibilityScore).ThenByDescending(item => item.CreatedAt).Select(item => ListingResponse(item)).FirstOrDefault(),
             activities = activity,
         });
     }
@@ -85,7 +86,13 @@ public static class PortalEndpoints
         if (!string.IsNullOrWhiteSpace(status)) query = query.Where(item => item.Status == status);
         if (long.TryParse(http.Request.Query["id"], out var id)) query = query.Where(item => item.Id == id);
         var rows = await query.OrderByDescending(item => item.FeasibilityScore).ThenByDescending(item => item.CreatedAt).Take(100).ToListAsync(cancellationToken);
-        return Results.Ok(rows.Select(ListingResponse));
+        var listingIds = rows.Select(item => item.Id).ToList();
+        var latestYields = await database.FeasibilityReports.AsNoTracking()
+            .Where(report => listingIds.Contains(report.ListingId) && report.YieldAt85OccPct != null)
+            .GroupBy(report => report.ListingId)
+            .Select(group => new { ListingId = group.Key, YieldAt85OccPct = group.OrderByDescending(report => report.Id).Select(report => report.YieldAt85OccPct).First() })
+            .ToDictionaryAsync(item => item.ListingId, item => item.YieldAt85OccPct, cancellationToken);
+        return Results.Ok(rows.Select(item => ListingResponse(item, latestYields.GetValueOrDefault(item.Id))));
     }
 
     private static async Task<IResult> CreateListingAsync([FromBody] ListingRequest request, HttpContext http, FgpDbContext database, CancellationToken cancellationToken)
@@ -160,15 +167,97 @@ public static class PortalEndpoints
         return Results.Ok(document);
     }
 
-    private static async Task<IResult> DownloadDocumentAsync(long id, HttpContext http, FgpDbContext database, CancellationToken cancellationToken)
+    private static async Task<IResult> DownloadDocumentAsync(long id, HttpContext http, FgpDbContext database, IArtifactStorage artifacts, CancellationToken cancellationToken)
     {
         var actor = await ResolveActorAsync(http, database, cancellationToken);
         if (actor is null) return Results.Unauthorized();
         var document = await database.ComplianceDocuments.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id && item.OrganizationId == actor.OrganizationId, cancellationToken);
-        return document is null ? Results.NotFound(new { error = "document not found" }) : Results.NotFound(new { error = "document has not been generated" });
+        if (document is null) return Results.NotFound(new { error = "document not found" });
+        if (string.IsNullOrWhiteSpace(document.PdfUrl)) return Results.NotFound(new { error = "document has not been generated" });
+        var stream = await artifacts.OpenAsync(document.PdfUrl, cancellationToken);
+        return stream is null
+            ? Results.NotFound(new { error = "document has not been generated" })
+            : Results.File(stream, "application/pdf", fileDownloadName: $"{document.DocType}.pdf");
     }
 
-    private static Task<IResult> GenerateDocumentAsync(long id, HttpContext http, FgpDbContext database, CancellationToken cancellationToken) => Task.FromResult<IResult>(Results.StatusCode(StatusCodes.Status501NotImplemented));
+    private static async Task<IResult> GenerateDocumentAsync(long id, HttpContext http, FgpDbContext database, IWorkerClient worker, IArtifactStorage artifacts, CancellationToken cancellationToken)
+    {
+        var actor = await ResolveActorAsync(http, database, cancellationToken);
+        if (actor is null) return Results.Unauthorized();
+        var document = await database.ComplianceDocuments.SingleOrDefaultAsync(item => item.Id == id && item.OrganizationId == actor.OrganizationId, cancellationToken);
+        if (document is null) return Results.NotFound(new { error = "document not found" });
+
+        var context = await BuildDocumentContextAsync(database, actor.OrganizationId, document, cancellationToken);
+        var workerResponse = await worker.PostAsync("/forms/generate", new { doc_type = document.DocType, context }, cancellationToken);
+        if ((int)workerResponse.StatusCode is < 200 or >= 300 || workerResponse.Content is not { Length: > 0 })
+        {
+            return Results.Json(new { error = "Document generation failed" }, statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        var key = $"documents/{actor.OrganizationId:N}/{document.Id}.pdf";
+        await artifacts.SaveAsync(key, workerResponse.Content, cancellationToken);
+        document.PdfUrl = key;
+        document.Status = "ready";
+        await database.SaveChangesAsync(cancellationToken);
+        return Results.Ok(document);
+    }
+
+    private static async Task<Dictionary<string, object?>> BuildDocumentContextAsync(FgpDbContext database, Guid organizationId, ComplianceDocument document, CancellationToken cancellationToken)
+    {
+        var context = new Dictionary<string, object?>();
+        if (document.PrefilledData is not null)
+        {
+            foreach (var property in document.PrefilledData.RootElement.EnumerateObject())
+            {
+                context[property.Name] = property.Value.ValueKind == JsonValueKind.String
+                    ? property.Value.GetString()
+                    : property.Value.Clone();
+            }
+        }
+        void Fallback(string key, object? value)
+        {
+            if (!context.ContainsKey(key) && value is not null)
+            {
+                context[key] = value;
+            }
+        }
+        if (document.ListingId is long listingId)
+        {
+            var listing = await database.Listings.AsNoTracking().SingleOrDefaultAsync(item => item.Id == listingId && item.OrganizationId == organizationId, cancellationToken);
+            if (listing is not null)
+            {
+                Fallback("address", listing.Address);
+                Fallback("municipality", listing.Municipality);
+                Fallback("suburb", listing.Suburb);
+                Fallback("zone_code", listing.ZoneCode);
+                Fallback("dolomite_risk", listing.DolomiteRisk);
+                Fallback("parcel_id", listing.ParcelId);
+                if (listing.ParcelId is long parcelId)
+                {
+                    var parcel = await database.Parcels.AsNoTracking().SingleOrDefaultAsync(item => item.Id == parcelId, cancellationToken);
+                    if (parcel is not null)
+                    {
+                        Fallback("erf_number", parcel.ErfNumber);
+                        Fallback("township", parcel.Township);
+                        Fallback("size_sqm", parcel.SizeSqm);
+                    }
+                }
+                if (!string.IsNullOrWhiteSpace(listing.ZoneCode))
+                {
+                    var zone = await database.ZoningSchemeRules.AsNoTracking().SingleOrDefaultAsync(item => item.Municipality == listing.Municipality && item.ZoneCode == listing.ZoneCode, cancellationToken);
+                    if (zone is not null)
+                    {
+                        Fallback("zone_label", zone.ZoneLabel);
+                        Fallback("coverage_pct", zone.CoveragePct);
+                        Fallback("far", zone.Far);
+                        Fallback("max_storeys", zone.MaxStoreys);
+                    }
+                }
+            }
+        }
+        return context;
+    }
+
 
     private static async Task<IResult> GetSettingsAsync(HttpContext http, FgpDbContext database, CancellationToken cancellationToken)
     {
@@ -308,7 +397,7 @@ public static class PortalEndpoints
         return await database.Memberships.Where(item => item.OrganizationId == organizationId && item.UserId == userId && item.Status == MembershipStatus.Active).Join(database.Users, member => member.UserId, user => user.Id, (member, user) => new Actor(member.Id, member.OrganizationId, user.Id, user.DisplayName ?? user.UserName ?? "Member", user.Email ?? "")).SingleOrDefaultAsync(cancellationToken);
     }
 
-    private static object ListingResponse(Listing item) => new { item.Id, item.Source, item.SourceId, item.SourceUrl, item.Address, item.Suburb, item.City, item.Municipality, item.SizeSqm, item.Price, item.PricePerSqm, item.ListingType, item.Description, item.ParcelId, item.ZoneCode, item.DolomiteRisk, item.Status, item.FeasibilityScore, latitude = item.Coordinates?.Y, longitude = item.Coordinates?.X, item.CreatedAt, item.UpdatedAt };
+    private static object ListingResponse(Listing item, decimal? yieldAt85OccPct = null) => new { item.Id, item.Source, item.SourceId, item.SourceUrl, item.Address, item.Suburb, item.City, item.Municipality, item.SizeSqm, item.Price, item.PricePerSqm, item.ListingType, item.Description, item.ParcelId, item.ZoneCode, item.DolomiteRisk, item.Status, item.FeasibilityScore, YieldAt85OccPct = yieldAt85OccPct, latitude = item.Coordinates?.Y, longitude = item.Coordinates?.X, item.CreatedAt, item.UpdatedAt };
     private static object ProjectSummary(Project item) => new { item.Id, item.Name, item.Status, township = (string?)null, erfNumber = (string?)null, phase1TargetZar = item.Phase1TargetZar, monthlySavingZar = item.MonthlySavingZar };
     private static void AddActivity(FgpDbContext database, Actor actor, string eventType, string title, string? detail, string? entityType, string? entityId) => database.ActivityEvents.Add(new ActivityEvent { OrganizationId = actor.OrganizationId, ActorUserId = actor.UserId, ActorName = actor.Name, EventType = eventType, Title = title, Detail = detail, EntityType = entityType, EntityId = entityId, CreatedAt = DateTimeOffset.UtcNow });
 

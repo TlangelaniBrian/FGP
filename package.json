@@ -4,10 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter web dev",
-    "build": "npm --prefix apps/web run build",
-    "test:security-regression": "node scripts/security-regression-smoke.mjs",
+    "build": "pnpm --filter web run build",
+    "lint": "pnpm --filter web lint",
     "typecheck": "pnpm --filter web run typecheck",
-    "lint": "pnpm --filter web lint"
+    "test:web": "pnpm --filter web run test --run",
+    "test:api": "./scripts/run-api-tests.sh",
+    "test:worker": "cd apps/worker && uv run --extra dev pytest",
+    "test:security-regression": "node scripts/security-regression-smoke.mjs"
   },
   "engines": {
     "node": ">=20",

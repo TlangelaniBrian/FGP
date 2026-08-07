@@ -14,11 +14,11 @@ export type ScoutListing = {
   status: string | null;
   latitude: number | null;
   longitude: number | null;
-  yieldAt85OccPct: number | null;
+  yieldAt85OccPct?: number | null;
 };
 
-function numberOrNull(value: string | null): number | null {
-  if (value === null) return null;
+function numberOrNull(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -37,6 +37,7 @@ export function ScoutLeadCard({
   const size = numberOrNull(listing.sizeSqm);
   const price = numberOrNull(listing.price);
   const pricePerSqm = size && price !== null ? price / size : null;
+  const yieldAt85OccPct = numberOrNull(listing.yieldAt85OccPct);
   const score = listing.feasibilityScore;
   const scoreBand = score === null ? "unscored" : score >= 80 ? "high" : score >= 60 ? "medium" : "low";
   const address = listing.address?.trim() || "Untitled listing";
@@ -72,7 +73,7 @@ export function ScoutLeadCard({
           <span className={listing.dolomiteRisk?.toLowerCase() === "low" ? "tag tag-green" : "tag tag-amber"}>
             {listing.dolomiteRisk ? `${listing.dolomiteRisk} dolomite` : "Dolomite pending"}
           </span>
-          {listing.yieldAt85OccPct !== null && <span className="tag tag-green">{listing.yieldAt85OccPct.toFixed(1)}% yield</span>}
+          {yieldAt85OccPct !== null && <span className="tag tag-green">{yieldAt85OccPct.toFixed(1)}% yield</span>}
         </div>
         <Link href={`/scout/${listing.id}`} className="button button-quiet scout-open-action">Open</Link>
       </div>

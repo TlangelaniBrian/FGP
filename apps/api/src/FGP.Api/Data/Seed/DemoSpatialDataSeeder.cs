@@ -30,7 +30,7 @@ public static class DemoSpatialDataSeeder
         AddAmenity(database, geometryFactory, "Demo Kgabo Village Mall", "mall", 28.0905, -25.5421);
         AddAmenity(database, geometryFactory, "Demo Soshanguve Taxi Rank", "taxi_rank", 28.0838, -25.5411);
         AddAmenity(database, geometryFactory, "Demo Noordwyk Primary School", "school", 28.1278, -25.9742);
-        AddAmenity(database, geometryFactory, "Demo Midrand Gautrain Station", "transport", 28.138, -25.987);
+        AddAmenity(database, geometryFactory, "Demo Midrand Gautrain Station", "gautrain", 28.138, -25.987);
         await database.SaveChangesAsync(cancellationToken);
     }
 
