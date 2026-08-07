@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from html import escape
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/forms", tags=["forms"])
 
@@ -42,5 +45,9 @@ async def generate_form(body: FormRequest) -> Response:
         </style></head><body><h1>First Generation Properties</h1><div class='meta'>{escape(title)} · Generated working document</div><table>{rows}</table><div class='footer'>This document is generated from the FGP feasibility workspace and must be reviewed by the relevant planning professional before submission.</div></body></html>"""
         pdf = HTML(string=html).write_pdf()
     except Exception:
+        # The fallback keeps generation working, but a permanently broken renderer
+        # would otherwise be invisible: every document silently degrades to plain
+        # text. Log it so a missing native dependency is diagnosable.
+        logger.exception("WeasyPrint rendering failed for %s; using fallback PDF", body.doc_type)
         pdf = fallback_pdf(title, body.context)
     return Response(content=pdf, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename={body.doc_type}.pdf"})

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { actorHeaders } from "@/lib/portal-client";
 import { can, formatZar } from "@/lib/portal-state";
 import { usePortalActor } from "@/lib/portal-actor";
+import { nextCapitalMilestone } from "@/lib/capital-milestones";
 
 type Contribution = {
   id: number;
@@ -77,6 +78,10 @@ export default function CapitalPage() {
         ),
       ).sort((a, b) => b[1] - a[1]),
     [contributions],
+  );
+  const nextMilestone = useMemo(
+    () => nextCapitalMilestone(total, goal),
+    [total, goal],
   );
 
   useEffect(() => {
@@ -388,9 +393,13 @@ export default function CapitalPage() {
         </div>
         <div className="card stat-card">
           <span className="card-kicker">Next milestone</span>
-          <div className="stat-value">R 500k</div>
+          <div className="stat-value">
+            {nextMilestone ? formatZar(nextMilestone.amount) : formatZar(goal)}
+          </div>
           <div className="stat-note">
-            {formatZar(Math.max(0, 500000 - total))} to go
+            {nextMilestone
+              ? `${formatZar(nextMilestone.remaining)} to go · ${nextMilestone.label}`
+              : "Goal reached"}
           </div>
         </div>
       </div>

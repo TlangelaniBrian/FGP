@@ -41,7 +41,13 @@ services:
         condition: service_healthy
     volumes:
       - ../apps/worker:/app
-    command: uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+      # Keep the image's Linux virtualenv out of the bind mount. Without this the
+      # host .venv shadows it, so a host-side `uv run` (which recreates .venv)
+      # tears the running worker's interpreter out from under it.
+      - worker_venv:/app/.venv
+    # Reload on source only; watching the whole tree makes any .venv churn
+    # restart — and often wedge — the worker.
+    command: uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/routers --reload-dir /app/services
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -67,6 +73,9 @@ services:
       Email__SmtpHost: mailpit
       Email__SmtpPort: 1025
       Web__PublicOrigin: http://localhost:3000
+      # Absolute, so generated PDFs never land next to the source regardless of
+      # the process working directory.
+      Artifacts__StoragePath: /workspace/.artifacts
     ports:
       - "8080:8080"
     volumes:
@@ -79,3 +88,4 @@ services:
 
 volumes:
   postgis_data:
+  worker_venv:
