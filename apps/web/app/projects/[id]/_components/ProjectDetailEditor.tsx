@@ -3,14 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { actorHeaders } from "@/lib/portal-client";
-import { can } from "@/lib/portal-state";
-import { usePortalActor } from "@/lib/portal-actor";
+import { useSession } from "@/lib/session-context";
 
 type DetailKind = "budget" | "contact" | "decision" | "milestone";
 
 export function ProjectDetailEditor({ projectId }: { projectId: number }) {
   const router = useRouter();
-  const actor = usePortalActor();
+  const { capabilities } = useSession();
   const [kind, setKind] = useState<DetailKind>("budget");
   const [primary, setPrimary] = useState("");
   const [secondary, setSecondary] = useState("");
@@ -18,7 +17,7 @@ export function ProjectDetailEditor({ projectId }: { projectId: number }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const canEdit = can(actor?.role ?? "Viewer", "project");
+  const canEdit = capabilities.includes("RecordContribution");
 
   async function save(event: React.FormEvent) {
     event.preventDefault();

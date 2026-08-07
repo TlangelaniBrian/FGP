@@ -16,25 +16,6 @@ export function isVisualDirection(value: unknown): value is VisualDirection {
   return typeof value === "string" && (VISUAL_DIRECTIONS as readonly string[]).includes(value);
 }
 
-export const team = [
-  { name: "Tlangelani Mkhabela", initials: "TM", role: "Treasurer" as Role, email: "tlangelani@fgproperties.co.za" },
-  { name: "Thabo Nkosi", initials: "TN", role: "Chairperson" as Role, email: "thabo@fgproperties.co.za" },
-  { name: "Lerato Dube", initials: "LD", role: "Analyst" as Role, email: "lerato@fgproperties.co.za" },
-  { name: "Mpho Molefe", initials: "MM", role: "Viewer" as Role, email: "mpho@fgproperties.co.za" },
-];
-
-export const permissions: Record<Role, string[]> = {
-  Owner: ["record", "project", "tariff", "settings", "team", "cosign", "proposal"],
-  Chairperson: ["record", "project", "tariff", "settings", "team", "cosign"],
-  Treasurer: ["record", "project", "tariff", "settings", "cosign", "proposal"],
-  Analyst: ["record", "project", "settings", "cosign"],
-  Viewer: [],
-};
-
-export function can(role: Role, capability: string) {
-  return permissions[role].includes(capability);
-}
-
 export function readPortalPreference<T>(key: string, fallback: T, isValid: (value: unknown) => value is T): T {
   if (typeof window === "undefined") return fallback;
   try {

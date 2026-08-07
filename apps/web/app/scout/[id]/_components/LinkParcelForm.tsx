@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { usePortalActor } from "@/lib/portal-actor";
-import { can } from "@/lib/portal-state";
+import { useSession } from "@/lib/session-context";
 
 export function LinkParcelForm({ listingId, parcelId }: { listingId: number; parcelId: number | null }) {
   const router = useRouter();
-  const actor = usePortalActor();
-  const canEdit = can(actor?.role ?? "Viewer", "record");
+  const { capabilities } = useSession();
+  const canEdit = capabilities.includes("RecordContribution");
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [message, setMessage] = useState<string | null>(null);

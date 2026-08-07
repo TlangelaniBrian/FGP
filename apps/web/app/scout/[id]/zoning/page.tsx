@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { actorHeaders } from "@/lib/portal-client";
-import { usePortalActor } from "@/lib/portal-actor";
-import { can } from "@/lib/portal-state";
+import { useSession } from "@/lib/session-context";
 
 const steps = ["Confirm current zoning certificate", "Prepare dolomite declaration", "Submit building plan checklist", "Compile pre-application motivation"];
 const docs = ["zoning_certificate", "dolomite_declaration", "building_plan_checklist", "motivation_letter"];
@@ -13,8 +12,8 @@ type Document = { id: number; docType: string; status: string; pdfUrl?: string |
 type Listing = { address: string | null; municipality: string | null; zoneCode: string | null; dolomiteRisk: string | null; parcelId: number | null };
 
 export default function ZoningPage({ params }: { params: Promise<{ id: string }> }) {
-  const actor = usePortalActor();
-  const canEdit = can(actor?.role ?? "Viewer", "project");
+  const { capabilities } = useSession();
+  const canEdit = capabilities.includes("RecordContribution");
   const [id, setId] = useState("parcel");
   const [listing, setListing] = useState<Listing | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);

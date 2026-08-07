@@ -1,8 +1,7 @@
 "use client";
 import { useState } from "react";
 import { CheckInModal } from "./CheckInModal";
-import { can } from "@/lib/portal-state";
-import { usePortalActor } from "@/lib/portal-actor";
+import { useSession } from "@/lib/session-context";
 
 type Checkin = {
   weekOf: string;
@@ -16,8 +15,8 @@ type Checkin = {
 
 export function ThisWeek({ projectId, latestCheckin }: { projectId: number; latestCheckin: Checkin }) {
   const [open, setOpen] = useState(false);
-  const actor = usePortalActor();
-  const canEdit = can(actor?.role ?? "Viewer", "project");
+  const { capabilities } = useSession();
+  const canEdit = capabilities.includes("RecordContribution");
 
   const actions = latestCheckin?.actionsNextCall
     ?.split("\n").filter(Boolean)

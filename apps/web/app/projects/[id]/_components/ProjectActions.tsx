@@ -2,17 +2,16 @@
 
 import { useState } from "react";
 import { actorHeaders } from "@/lib/portal-client";
-import { can } from "@/lib/portal-state";
-import { usePortalActor } from "@/lib/portal-actor";
+import { useSession } from "@/lib/session-context";
 
 export function ProjectActions({ project }: { project: { id: number; name: string; status: string; notes?: string | null } }) {
-  const actor = usePortalActor();
+  const { capabilities } = useSession();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(project.name);
   const [status, setStatus] = useState(project.status);
   const [notes, setNotes] = useState(project.notes ?? "");
   const [message, setMessage] = useState<string | null>(null);
-  if (!can(actor?.role ?? "Viewer", "project")) return <span className="tag">Read-only</span>;
+  if (!capabilities.includes("RecordContribution")) return <span className="tag">Read-only</span>;
   async function save(event: React.FormEvent) {
     event.preventDefault();
     const response = await fetch(`/api/projects/${project.id}`, { method: "PATCH", headers: actorHeaders(), body: JSON.stringify({ name, status, notes }) });
