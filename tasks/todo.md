@@ -15,26 +15,36 @@ what is open.
 - Capital fund governance: immutable contribution versions, distinct Owner/Chairperson
   correction approval, exact fund-goal electorate with proposer assent, and
   membership-change voiding with linked audit events.
-- Compliance document PDF generation and download over local artifact storage.
-- Structured per-category tariff editor.
+- Compliance document PDF generation and download over local artifact storage, rendering
+  through WeasyPrint (its native libraries were missing from the worker image, so every
+  document had been silently falling back to plain text).
+- Structured per-category tariff editor, including server-side per-category validation.
 - Deterministic demo seeding: five role users, reference tariffs, spatial fixtures,
   five Gauteng leads, three projects with full detail, three months of contributions.
 - Documentation: `docs/architecture.md`, `docs/demo-runbook.md`, rewritten README.
 
 ## Open
 
-Tracked as GitHub issues. Ordered by what a first-time viewer notices.
+Sequenced in `docs/roadmap.md` and mirrored as GitHub milestones. Work the stages in
+order; within a stage, the roadmap gives the step number.
 
-- [ ] Capital page still posts through the legacy `/api/capital` multiplexer instead of
-      the dedicated routes; the multiplexer cannot be deleted until it does. (#11, #12)
-- [ ] Five-role browser acceptance suite is written but not landed; its GitGuardian
-      check fails on the deterministic demo password. (#15, PR #27)
-- [ ] Tariff API validation and seed bulk-rate parity. (#13, #14)
-- [ ] Scout zoning compliance flow end-to-end verification. (#9)
-- [ ] Scraper network, Celery wiring and GIS ingestion — owner-gated. (#16, #17, #18)
-- [ ] Six WeasyPrint compliance templates. (#19)
-- [ ] Housekeeping: amenity bug, remaining env/doc drift, dead code. (#20)
-- [ ] Deployment and Azure Blob storage — owner-gated. (#21)
+- **Stage 0 — demo readiness (by 2026-08-10):** seed a ready compliance document so the
+  zoning screen is not empty (#9); clear the GitGuardian false positive (#31, owner
+  action); delete the orphaned `/api/team` stubs (#12).
+- **Stage 1 — safety net:** land the five-role acceptance suite (#15) *before* the
+  capital refactor, so role regressions are caught. Fix its logging first — compose logs
+  currently bury Playwright's reporter.
+- **Stage 2 — correctness and debt:** enrich the dedicated capital routes (#10), then
+  migrate the page and delete the legacy multiplexer (#11); seed bulk-rate parity (#13),
+  then surface tariff field errors (#14).
+- **Stage 3 — feature depth:** six compliance templates (#19, currently one generic
+  template serves every doc type); scraper network (#16) → API wiring (#17) → GIS
+  ingestion (#18).
+- **Stage 4 — owner-gated:** deployment and Azure Blob storage (#21).
+
+Before starting any of these: rebase onto `main`, and verify the issue against the code.
+On 2026-08-07, four of seventeen open issues were already delivered and two were
+half-delivered.
 
 ## Gates
 
