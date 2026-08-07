@@ -126,3 +126,33 @@ are not Stage 0; they remain open for the phase-2 slice.
 - Full matrix green: web 32/32, API 131/131, worker 47/47; lint, typecheck, build pass.
 - After API restart, POST/PATCH/DELETE `/api/team` return 405 (no handler) instead of
   501, `GET /api/team` and `/api/organizations/members` still 200.
+
+## Current slice — #15 / PR #27: make the acceptance harness actually run
+
+PR #27 is the five-role acceptance suite (#15). Its `acceptance` CI job never ran
+Playwright: the readiness probe could never match and the runner could not find the
+Playwright config. #31 (GitGuardian dashboard false positive) is an owner action and
+remains the only merge blocker after these fixes.
+
+- [x] Rebase PR #27 onto current `main` (was 4 behind).
+- [x] Probe `/sign-in` for web readiness instead of matching dashboard HTML truncated to
+      2000 bytes.
+- [x] Run Playwright from `apps/web` so the config and specs are found.
+- [x] Keep the container's Linux `node_modules` out of the host checkout via named
+      volumes (same class as the #34 worker fix).
+- [x] Upload `playwright-report/` and `test-results/` from CI on every run.
+- [x] Note the CapabilityPolicy-vs-handoff divergence in the suite instead of silently
+      picking a side; remove dead `signOut`; return body with `apiStatus`.
+- [x] README: use `playwright install --with-deps` and warn that the script tears the
+      stack down.
+- [x] Full matrix green; Playwright collects 10 specs; pushed for CI.
+
+### Review
+
+Local verification: `bash -n` and `docker compose config -q` pass; Playwright collects
+10 specs; vitest excludes `e2e/` while keeping `configDefaults`; full matrix green
+(web 32/32, API 131/131, worker 47/47, lint/typecheck/build).
+
+CI on the final head (`9b78fca`): `verify` passed (2m37s), `acceptance` passed (2m53s)
+with all 10 Playwright specs actually running. GitGuardian still fails on the
+deterministic demo password — #31 owner dashboard action is the only remaining blocker.

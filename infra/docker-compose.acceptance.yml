@@ -1,0 +1,49 @@
+services:
+  seed:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    working_dir: /workspace
+    command: dotnet run --project apps/api/src/FGP.Api/FGP.Api.csproj --no-launch-profile -- --seed-demo
+    environment:
+      ConnectionStrings__Fgp: Host=postgis;Port=5432;Database=postgres;Username=postgres;Password=postgres
+      Seed__OrganizationId: ${SEED_ORGANIZATION_ID:-11111111-2222-4333-8444-555555555555}
+    volumes:
+      - ../:/workspace
+    depends_on:
+      postgis:
+        condition: service_healthy
+
+  api:
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    depends_on:
+      postgis:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+
+  web:
+    image: node:20
+    working_dir: /workspace
+    command: sh -c "corepack enable && corepack prepare pnpm@10 --activate && pnpm install --frozen-lockfile && pnpm --filter web dev"
+    environment:
+      API_INTERNAL_ORIGIN: http://api:8080
+      CI: "true"
+      npm_config_confirm_modules_purge: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../:/workspace
+      - web_node_modules:/workspace/node_modules
+      - web_app_node_modules:/workspace/apps/web/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  web_node_modules:
+  web_app_node_modules:

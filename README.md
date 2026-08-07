@@ -49,6 +49,20 @@ service does not mount the socket. CI runs `dotnet test` directly on the runner.
 The worker has no published host port in the compose configuration. CI is defined in
 `.github/workflows/verify.yml`.
 
+### Browser acceptance
+
+The five-role Settings/Tariffs acceptance suite runs Playwright against the compose stack (`infra/docker-compose.yml` plus the `infra/docker-compose.acceptance.yml` override, which seeds one demo user per role and starts the web service on port `3000`):
+
+```bash
+pnpm --filter web exec playwright install --with-deps chromium
+pnpm acceptance
+```
+
+Demo role users use fixed local-only credentials (`<role>@fgp.demo`, password documented in `apps/api/src/FGP.Api/Data/Seed/RoleUserSeeder.cs`) and are created only by the deterministic `--seed-demo` path against a local database host.
+
+Note: `pnpm acceptance` starts the compose stack and tears it down (`down -v`) when it
+finishes, so do not run it against a stack you need to keep.
+
 ## Data handling
 
 Reference values and deterministic spatial fixtures are seeded only through
