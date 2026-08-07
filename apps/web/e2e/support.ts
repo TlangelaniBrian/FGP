@@ -4,34 +4,65 @@ export const DEMO_PASSWORD = "Fgp-Demo-2026!Pass"; // ggignore: deterministic de
 
 // This matrix asserts the current server-side CapabilityPolicy
 // (apps/api/src/FGP.Api/Identity/AuthorizationPolicies.cs), not a UI convenience
-// layer. It intentionally differs from the earlier design handoff for Treasurer
-// (editTariffs/manageTeam) and Chairperson (propose goal/correction); reconciling the
-// handoff with the policy is an owner decision tracked separately.
+// layer. The boolean fields mirror Capabilities.All; the policy is the truth source
+// for every page assertion. It intentionally differs from the earlier design handoff
+// for Treasurer (editTariffs/manageTeam) and Chairperson (propose goal/correction);
+// reconciling the handoff with the policy is an owner decision tracked separately.
 export const FIVE_ROLES = [
-  { role: "Owner", email: "owner@fgp.demo", editTariffs: true, manageTeam: true },
+  {
+    role: "Owner",
+    email: "owner@fgp.demo",
+    editTariffs: true,
+    manageTeam: true,
+    recordContribution: true,
+    proposeFundGoal: true,
+    proposeCorrection: true,
+    coSignOperational: true,
+    coSignFinancial: true,
+  },
   {
     role: "Chairperson",
     email: "chairperson@fgp.demo",
     editTariffs: true,
     manageTeam: true,
+    recordContribution: true,
+    proposeFundGoal: true,
+    proposeCorrection: true,
+    coSignOperational: true,
+    coSignFinancial: true,
   },
   {
     role: "Treasurer",
     email: "treasurer@fgp.demo",
     editTariffs: false,
     manageTeam: false,
+    recordContribution: true,
+    proposeFundGoal: true,
+    proposeCorrection: true,
+    coSignOperational: true,
+    coSignFinancial: false,
   },
   {
     role: "Analyst",
     email: "analyst@fgp.demo",
     editTariffs: false,
     manageTeam: false,
+    recordContribution: true,
+    proposeFundGoal: false,
+    proposeCorrection: false,
+    coSignOperational: true,
+    coSignFinancial: false,
   },
   {
     role: "Viewer",
     email: "viewer@fgp.demo",
     editTariffs: false,
     manageTeam: false,
+    recordContribution: false,
+    proposeFundGoal: false,
+    proposeCorrection: false,
+    coSignOperational: false,
+    coSignFinancial: false,
   },
 ] as const;
 
