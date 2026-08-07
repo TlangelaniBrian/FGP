@@ -79,7 +79,9 @@ public sealed class DemoPortalSeedTests
         Assert.Equal("zoning_certificate", document.DocType);
         Assert.Equal("ready", document.Status);
         Assert.Equal(soshanguve.Id, document.ListingId);
-        Assert.NotNull(document.PdfUrl);
+        // A deterministic key means reseeding overwrites the same artifact instead of
+        // leaving an orphaned PDF under a fresh document id.
+        Assert.Equal($"documents/{DemoOrganizationId:N}/demo/zoning-certificate.pdf", document.PdfUrl);
 
         await using var artifactScope = app.Services.CreateAsyncScope();
         var artifacts = artifactScope.ServiceProvider.GetRequiredService<IArtifactStorage>();
@@ -101,5 +103,9 @@ public sealed class DemoPortalSeedTests
         Assert.Equal(3, await database.Projects.CountAsync(item => item.OrganizationId == DemoOrganizationId));
         Assert.Equal(12, await database.CapitalContributions.CountAsync(item => item.OrganizationId == DemoOrganizationId));
         Assert.Equal(1, await database.ComplianceDocuments.CountAsync(item => item.OrganizationId == DemoOrganizationId));
+        var document = await database.ComplianceDocuments
+            .AsNoTracking()
+            .SingleAsync(item => item.OrganizationId == DemoOrganizationId);
+        Assert.Equal($"documents/{DemoOrganizationId:N}/demo/zoning-certificate.pdf", document.PdfUrl);
     }
 }

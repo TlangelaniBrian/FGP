@@ -86,3 +86,13 @@ half-delivered.
 - Live demo stack reseeded and API restarted; `GET /api/documents?listingId=24` returns
   the ready document and `GET /api/documents/5/download` returns a valid 1-page PDF
   (`application/pdf`, parses with pypdf).
+
+### Review follow-up — deterministic demo artifact key
+
+- [x] Seed writes to `documents/{orgId:N}/demo/zoning-certificate.pdf` so reseeds
+      overwrite the same blob instead of accumulating orphaned PDFs under fresh ids.
+- [x] `DemoPortalSeedTests` pins the deterministic key in both the populate and
+      idempotency tests.
+- [x] Reseeded the local demo stack, verified the overwrite path, and removed the two
+      pre-fix orphaned PDFs from `.artifacts/`.
+- [x] Full matrix re-run green; pushed to PR #38.

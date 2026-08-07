@@ -150,6 +150,9 @@ public static class DemoPortalDataSeeder
         CancellationToken cancellationToken)
     {
         var lead = Leads[0];
+        var key = $"documents/{organizationId:N}/demo/zoning-certificate.pdf";
+        await artifacts.SaveAsync(key, BuildDemoZoningPdf(), cancellationToken);
+
         var document = new ComplianceDocument
         {
             OrganizationId = organizationId,
@@ -157,6 +160,7 @@ public static class DemoPortalDataSeeder
             DocType = "zoning_certificate",
             Municipality = lead.Municipality,
             Status = "ready",
+            PdfUrl = key,
             PrefilledData = JsonDocument.Parse(JsonSerializer.Serialize(new
             {
                 address = lead.Address,
@@ -168,10 +172,6 @@ public static class DemoPortalDataSeeder
         };
         database.ComplianceDocuments.Add(document);
         await database.SaveChangesAsync(cancellationToken);
-
-        var key = $"documents/{organizationId:N}/{document.Id}.pdf";
-        await artifacts.SaveAsync(key, BuildDemoZoningPdf(), cancellationToken);
-        document.PdfUrl = key;
     }
 
     private static byte[] BuildDemoZoningPdf()
