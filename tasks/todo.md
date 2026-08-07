@@ -61,3 +61,38 @@ half-delivered.
 4. Run focused tests, then `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test:api`,
    `pnpm test:worker`.
 5. Record lessons in `tasks/lessons.md` when a correction changes the approach.
+
+## Current slice — #9: seed a ready compliance document
+
+- [x] Add `IArtifactStorage` to `DemoPortalDataSeeder.SeedAsync` and save one
+      `zoning_certificate` PDF for the Soshanguve lead (status `ready`).
+- [x] Wire storage through `Program.cs` `--seed-demo`.
+- [x] Extend `DemoPortalSeedTests`: ready document exists with a downloadable PDF and
+      reseeding keeps the count at one.
+- [x] Run focused API tests, then the full verification matrix.
+- [x] Reseed the local demo stack, restart the API, and confirm the Soshanguve zoning
+      screen shows one ready document with a working PDF link.
+- [x] Open the PR and report the iteration.
+
+### Review
+
+- Verified against main before editing: the compliance flow works end to end (#7/#33/#34);
+  the remaining gap is exactly that `DemoPortalDataSeeder.ClearAsync` removes every
+  `ComplianceDocument` and none are recreated.
+- Change is seed-only: one `zoning_certificate` row (status `ready`) for the Soshanguve
+  lead, with a real stored PDF via `IArtifactStorage`; no API or UI code changed.
+- Focused `DemoPortalSeedTests`: 2/2 passed. Full matrix: web 32/32, API 131/131,
+  worker 47/47, plus lint, typecheck and production build.
+- Live demo stack reseeded and API restarted; `GET /api/documents?listingId=24` returns
+  the ready document and `GET /api/documents/5/download` returns a valid 1-page PDF
+  (`application/pdf`, parses with pypdf).
+
+### Review follow-up — deterministic demo artifact key
+
+- [x] Seed writes to `documents/{orgId:N}/demo/zoning-certificate.pdf` so reseeds
+      overwrite the same blob instead of accumulating orphaned PDFs under fresh ids.
+- [x] `DemoPortalSeedTests` pins the deterministic key in both the populate and
+      idempotency tests.
+- [x] Reseeded the local demo stack, verified the overwrite path, and removed the two
+      pre-fix orphaned PDFs from `.artifacts/`.
+- [x] Full matrix re-run green; pushed to PR #38.

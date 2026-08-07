@@ -1,3 +1,4 @@
+using FGP.Api.Artifacts;
 using FGP.Api.CapitalFund;
 using FGP.Api.Data;
 using FGP.Api.Data.Seed;
@@ -23,8 +24,9 @@ public sealed class DemoPortalSeedTests
         await using var scope = app.Services.CreateAsyncScope();
         var database = scope.ServiceProvider.GetRequiredService<FgpDbContext>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var artifacts = scope.ServiceProvider.GetRequiredService<IArtifactStorage>();
         await RoleUserSeeder.SeedAsync(database, userManager, DemoOrganizationId);
-        await DemoPortalDataSeeder.SeedAsync(database, DemoOrganizationId);
+        await DemoPortalDataSeeder.SeedAsync(database, DemoOrganizationId, artifacts);
     }
 
     [Fact]
@@ -68,6 +70,23 @@ public sealed class DemoPortalSeedTests
         Assert.All(contributions, contribution => Assert.Equal(CapitalFundStatuses.Posted, contribution.Status));
         // The Viewer must not appear in the ledger: it is outside the governing set.
         Assert.Equal(4, contributions.Select(contribution => contribution.MemberId).Distinct().Count());
+
+        // The zoning screen opens with one ready document and a downloadable PDF.
+        var soshanguve = listings.Single(item => item.Address == "Erf 14201, Molefe Makinta Drive");
+        var document = await database.ComplianceDocuments
+            .AsNoTracking()
+            .SingleAsync(item => item.OrganizationId == DemoOrganizationId);
+        Assert.Equal("zoning_certificate", document.DocType);
+        Assert.Equal("ready", document.Status);
+        Assert.Equal(soshanguve.Id, document.ListingId);
+        // A deterministic key means reseeding overwrites the same artifact instead of
+        // leaving an orphaned PDF under a fresh document id.
+        Assert.Equal($"documents/{DemoOrganizationId:N}/demo/zoning-certificate.pdf", document.PdfUrl);
+
+        await using var artifactScope = app.Services.CreateAsyncScope();
+        var artifacts = artifactScope.ServiceProvider.GetRequiredService<IArtifactStorage>();
+        await using var pdf = await artifacts.OpenAsync(document.PdfUrl!, CancellationToken.None);
+        Assert.NotNull(pdf);
     }
 
     [Fact]
@@ -83,5 +102,10 @@ public sealed class DemoPortalSeedTests
         Assert.Equal(5, await database.Listings.CountAsync(item => item.OrganizationId == DemoOrganizationId));
         Assert.Equal(3, await database.Projects.CountAsync(item => item.OrganizationId == DemoOrganizationId));
         Assert.Equal(12, await database.CapitalContributions.CountAsync(item => item.OrganizationId == DemoOrganizationId));
+        Assert.Equal(1, await database.ComplianceDocuments.CountAsync(item => item.OrganizationId == DemoOrganizationId));
+        var document = await database.ComplianceDocuments
+            .AsNoTracking()
+            .SingleAsync(item => item.OrganizationId == DemoOrganizationId);
+        Assert.Equal($"documents/{DemoOrganizationId:N}/demo/zoning-certificate.pdf", document.PdfUrl);
     }
 }
