@@ -125,6 +125,7 @@ if (args.Contains("--seed-demo", StringComparer.Ordinal))
     await RoleUserSeeder.SeedAsync(seedDatabase, userManager, seedOrganizationId);
     await ReferenceDataSeeder.SeedAsync(seedDatabase, seedOrganizationId);
     await DemoSpatialDataSeeder.SeedAsync(seedDatabase);
+    await DemoPortalDataSeeder.SeedAsync(seedDatabase, seedOrganizationId);
     return;
 }
 
