@@ -11,6 +11,7 @@ worker is private behind the API's service-token boundary.
 - [Architecture](docs/architecture.md) — services, tenancy, governance rules, safety gates
 - [Demo runbook](docs/demo-runbook.md) — cold start to full walkthrough
 - [Delivery order](docs/roadmap.md) — what to work on next, and what blocks what
+- [Agent loops](docs/agent-loops.md) — prompts for working the roadmap and reviewing PRs
 
 ## Local development
 
