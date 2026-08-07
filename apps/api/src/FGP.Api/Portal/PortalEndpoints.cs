@@ -16,7 +16,6 @@ namespace FGP.Api.Portal;
 public static class PortalEndpoints
 {
     private static readonly string[] AllowedDocumentStatuses = ["draft", "ready", "submitted", "approved", "rejected"];
-    private static readonly string[] AllowedRoles = ["Owner", "Chairperson", "Treasurer", "Analyst", "Viewer"];
 
     public static void MapPortalEndpoints(this WebApplication app)
     {
@@ -34,9 +33,6 @@ public static class PortalEndpoints
         portal.MapGet("/settings", GetSettingsAsync);
         portal.MapPut("/settings", PutSettingsAsync).RequireAuthorization(Capabilities.ManageTeam);
         portal.MapGet("/team", ListTeamAsync);
-        portal.MapPost("/team", CreateTeamMemberAsync).RequireAuthorization(Capabilities.ManageTeam);
-        portal.MapPatch("/team", UpdateTeamMemberAsync).RequireAuthorization(Capabilities.ManageTeam);
-        portal.MapDelete("/team", RemoveTeamMemberAsync).RequireAuthorization(Capabilities.ManageTeam);
         portal.MapPost("/projects/{id:long}/details", AddProjectDetailAsync).RequireAuthorization(Capabilities.RecordContribution);
         portal.MapGet("/scrape/jobs", ListScrapeJobsAsync);
         portal.MapPost("/scrape/jobs", CreateScrapeJobAsync).RequireAuthorization(Capabilities.RecordContribution);
@@ -291,17 +287,6 @@ public static class PortalEndpoints
         return Results.Ok(await database.Memberships.AsNoTracking().Where(item => item.OrganizationId == actor.OrganizationId).Join(database.Users, member => member.UserId, user => user.Id, (member, user) => new { id = member.Id, userId = user.Id, email = user.Email, name = user.DisplayName, role = member.Role.ToString(), status = member.Status.ToString().ToLowerInvariant() }).ToListAsync(cancellationToken));
     }
 
-    private static async Task<IResult> CreateTeamMemberAsync([FromBody] TeamMemberRequest request, HttpContext http, FgpDbContext database, CancellationToken cancellationToken)
-    {
-        var actor = await ResolveActorAsync(http, database, cancellationToken);
-        if (actor is null) return Results.Unauthorized();
-        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Name) || !AllowedRoles.Contains(request.Role, StringComparer.Ordinal)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["request"] = ["email, name, and valid role are required"] });
-        return Results.StatusCode(StatusCodes.Status501NotImplemented);
-    }
-
-    private static Task<IResult> UpdateTeamMemberAsync([FromBody] TeamUpdateRequest request, HttpContext http, FgpDbContext database, CancellationToken cancellationToken) => Task.FromResult<IResult>(Results.StatusCode(StatusCodes.Status501NotImplemented));
-    private static Task<IResult> RemoveTeamMemberAsync([FromBody] TeamUpdateRequest request, HttpContext http, FgpDbContext database, CancellationToken cancellationToken) => Task.FromResult<IResult>(Results.StatusCode(StatusCodes.Status501NotImplemented));
-
     private static async Task<IResult> AddProjectDetailAsync(long id, [FromBody] JsonElement request, HttpContext http, FgpDbContext database, CancellationToken cancellationToken)
     {
         var actor = await ResolveActorAsync(http, database, cancellationToken);
@@ -424,6 +409,4 @@ public sealed record ListingRequest(string? Address, string? Municipality, decim
 public sealed record CoordinateRequest(double Lat, double Lng);
 public sealed record DocumentRequest(long? ReportId, long? ListingId, string? Municipality, string[]? Forms, Dictionary<string, object>? PrefilledData);
 public sealed record DocumentStatusRequest(string Status);
-public sealed record TeamMemberRequest(string? Email, string? Name, string? Role);
-public sealed record TeamUpdateRequest(Guid Id, string? Role, string? Status);
 public sealed record ScrapeJobRequest(string? Source, string? Location, double RadiusKm = 20, double MinSizeSqm = 300, double MaxPrice = 5_000_000);
