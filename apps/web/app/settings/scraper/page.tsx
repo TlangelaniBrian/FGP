@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { actorHeaders } from "@/lib/portal-client";
-import { usePortalActor } from "@/lib/portal-actor";
-import { can } from "@/lib/portal-state";
+import { useSession } from "@/lib/session-context";
 
 type Job = { id: number; source: string; status: string; listingsFound: number | null; listingsNew: number | null; createdAt: string | null; searchParams: { location?: string } | null };
 
 export default function ScraperPage() {
-  const actor = usePortalActor();
-  const canEdit = can(actor?.role ?? "Viewer", "record");
+  const { capabilities } = useSession();
+  const canEdit = capabilities.includes("RecordContribution");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [source, setSource] = useState("property24");
   const [location, setLocation] = useState("Midrand");

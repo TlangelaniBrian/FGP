@@ -175,3 +175,25 @@ page asserts its `CapabilityPolicy` vectors.
 - [x] Run lint/typecheck/build/test:web, then the local acceptance stack, then the
       API and worker suites.
 - [x] Open the PR and report the iteration.
+
+## Current slice — #12: permission parity — web gating on session capabilities
+
+The API half of #12 (dead `/api/team` stubs) shipped in #39; the capital page gating
+divergence shipped with #40. This slice removes the remaining static web permission
+matrix so no `can(role, ...)` call survives and the API `CapabilityPolicy` is the only
+source of truth.
+
+- [x] Migrate the scraper and zoning pages to `useSession().capabilities`
+      (`RecordContribution`); they were already edited in the working tree.
+- [x] Migrate `ThisWeek`, `ProjectActions`, `ProjectDetailEditor`, and
+      `LinkParcelForm` from `can(role, ...)` to session capabilities.
+- [x] Delete the static `team`, `permissions`, and `can` exports from
+      `lib/portal-state.ts` (keep `Role` and preference helpers).
+- [x] Add `projects.spec.ts` and `scout.spec.ts` role-matrix coverage for the four
+      migrated components (`ProjectActions`, `ProjectDetailEditor`, `ThisWeek`,
+      `LinkParcelForm`) per the PR #41 review comment.
+- [x] Re-review fix: share one coordinate-less listing via `beforeAll` so the scout
+      Viewer branch exercises the `LinkParcelForm` capability guard instead of the
+      vacuous seeded-listing path.
+- [x] Run lint/typecheck/build/test:web, then the acceptance stack, then API/worker.
+- [x] Open the PR and report the iteration.
