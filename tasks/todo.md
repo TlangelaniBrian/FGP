@@ -197,3 +197,28 @@ source of truth.
       vacuous seeded-listing path.
 - [x] Run lint/typecheck/build/test:web, then the acceptance stack, then API/worker.
 - [x] Open the PR and report the iteration.
+
+## Current slice — #10: enrich the dedicated capital routes
+
+The governance half of `GET /api/capital` is delivered (members/requiredMembers are
+populated). Remaining: the dedicated write routes return lean shapes the capital page
+cannot consume directly.
+
+- [x] `POST /api/capital/contributions` returns `memberName/contributionDate/amount/note`
+      alongside `id`.
+- [x] `POST /api/capital/goals` and `POST /api/capital/goals/{id}/approvals` return the
+      page's goal contract (`id/newAmount/status/approved/approvals/proposedBy/
+      signatures` with member name+role), replacing the legacy-only response builder.
+- [x] `POST /api/capital/corrections` and `POST /api/capital/corrections/{id}/approvals`
+      return `id/contributionId/action/approvals/proposedBy/proposedByMemberId/
+      proposedAmount/proposedNote/signatures`.
+- [x] `GET /api/capital` corrections use the same contract (approvals/signatures/
+      proposedByMemberId) so the pending-corrections UI cannot hit undefined shapes.
+- [x] Wire the legacy multiplexer's `correction`/`approve-correction` actions through
+      the same builder (page still uses that path until #11) and add a regression test
+      that drives the legacy actions with the page's payloads.
+- [x] Update focused governance tests to the enriched shapes and pin the populated
+      governance payload.
+- [x] Run focused API tests, then the full verification matrix, restart the API, and
+      probe the live responses.
+- [x] Open the PR and report the iteration.
