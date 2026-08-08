@@ -192,5 +192,8 @@ source of truth.
 - [x] Add `projects.spec.ts` and `scout.spec.ts` role-matrix coverage for the four
       migrated components (`ProjectActions`, `ProjectDetailEditor`, `ThisWeek`,
       `LinkParcelForm`) per the PR #41 review comment.
+- [x] Re-review fix: share one coordinate-less listing via `beforeAll` so the scout
+      Viewer branch exercises the `LinkParcelForm` capability guard instead of the
+      vacuous seeded-listing path.
 - [x] Run lint/typecheck/build/test:web, then the acceptance stack, then API/worker.
 - [x] Open the PR and report the iteration.

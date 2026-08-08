@@ -1,24 +1,12 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { apiStatus, DEMO_PASSWORD, FIVE_ROLES, signIn } from "./support";
 
-const SOSHANGUVE_SUBURB = "Soshanguve South Ext 13";
+let unlinkedListingId: number;
 
-async function seededListing(page: Page): Promise<{ id: number; address: string }> {
-  const response = await page.request.get("/api/listings");
-  expect(response.ok()).toBeTruthy();
-  const rows = (await response.json()) as Array<{
-    id: number;
-    address: string | null;
-    suburb: string | null;
-  }>;
-  const lead = rows.find((row) => row.suburb === SOSHANGUVE_SUBURB);
-  if (!lead?.address) {
-    throw new Error(`Seed lead ${SOSHANGUVE_SUBURB} was not found.`);
-  }
-  return { id: lead.id, address: lead.address };
-}
-
-async function createUnlinkedListing(page: Page): Promise<number> {
+test.beforeAll(async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await signIn(page, FIVE_ROLES[0].email, DEMO_PASSWORD);
   const response = await page.request.post("/api/listings", {
     data: {
       address: `E2E unlinked parcel ${Date.now()}`,
@@ -29,33 +17,32 @@ async function createUnlinkedListing(page: Page): Promise<number> {
   });
   expect(response.ok()).toBeTruthy();
   const row = (await response.json()) as { id: number };
-  return row.id;
-}
+  unlinkedListingId = row.id;
+  await context.close();
+});
 
 for (const { role, email, recordContribution } of FIVE_ROLES) {
   test(`${role} sees parcel-link controls per the RecordContribution capability`, async ({
     page,
   }) => {
     await signIn(page, email, DEMO_PASSWORD);
+    await page.goto(`/scout/${unlinkedListingId}`);
+    // The unlinked section renders for every role; only the form itself is
+    // capability-gated. Asserting the heading proves we reached the LinkParcelForm
+    // branch, so the button assertion below is not vacuous.
+    await expect(
+      page.getByRole("heading", { name: "Attach the real parcel" }),
+    ).toBeVisible();
+
     const linkButton = page.getByRole("button", { name: "Link to parcel" });
 
     if (recordContribution) {
-      const listingId = await createUnlinkedListing(page);
-      await page.goto(`/scout/${listingId}`);
-      await expect(
-        page.getByRole("heading", { name: "Attach the real parcel" }),
-      ).toBeVisible();
       await expect(linkButton).toBeVisible();
     } else {
-      const listing = await seededListing(page);
-      await page.goto(`/scout/${listing.id}`);
-      await expect(
-        page.getByRole("heading", { name: listing.address }),
-      ).toBeVisible();
       await expect(linkButton).toHaveCount(0);
       expect(
         (
-          await apiStatus(page, "POST", `/api/listings/${listing.id}/link-parcel`, {
+          await apiStatus(page, "POST", `/api/listings/${unlinkedListingId}/link-parcel`, {
             lat: -25.54,
             lng: 28.085,
           })
