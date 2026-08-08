@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Xunit;
 
 namespace FGP.Api.Tests;
@@ -29,7 +30,10 @@ public sealed class FundGoalGovernanceTests
         Assert.NotNull(proposal);
         Assert.Equal(CapitalFundStatuses.Open, proposal!.Status);
         Assert.Single(proposal.Approvals);
-        var proposalId = proposal.ProposalId;
+        Assert.Equal(4, proposal.Signatures.Count);
+        Assert.Contains(proposal.Signatures, signature => signature.Signed);
+        Assert.All(proposal.Signatures, signature => Assert.False(string.IsNullOrWhiteSpace(signature.Name)));
+        var proposalId = proposal.Id;
 
         foreach (var (email, expectedStatus) in new[]
         {
@@ -49,6 +53,11 @@ public sealed class FundGoalGovernanceTests
         Assert.Equal(4, await database.CapitalGoalApprovals.CountAsync(item => item.ProposalId == proposalId));
         Assert.Equal(900000m, await database.OrganizationSettings.Where(item => item.OrganizationId == owner.OrganizationId && item.Key == "capital_goal").Select(item => item.Value.RootElement.GetDecimal()).SingleAsync());
         Assert.Contains(await database.GovernanceAuditEvents.ToListAsync(), item => item.EventType == "fund_goal_applied");
+
+        var capital = await ownerClient.GetFromJsonAsync<CapitalResponse>("/api/capital/");
+        Assert.NotNull(capital);
+        Assert.Equal(4, capital!.Governance.Members.Count);
+        Assert.Equal(4, capital.Governance.RequiredMembers.Count);
     }
 
     [Fact]
@@ -61,7 +70,7 @@ public sealed class FundGoalGovernanceTests
         var proposalResponse = await ownerClient.PostAsJsonAsync("/api/capital/goals", new { newAmount = 900000m });
         var proposal = await proposalResponse.Content.ReadFromJsonAsync<GoalResponse>();
         Assert.NotNull(proposal);
-        var proposalId = proposal!.ProposalId;
+        var proposalId = proposal!.Id;
 
         var change = await ownerClient.PatchAsJsonAsync($"/api/organizations/members/{chair.Id}", new { status = "Removed" });
         Assert.Equal(HttpStatusCode.OK, change.StatusCode);
@@ -83,7 +92,7 @@ public sealed class FundGoalGovernanceTests
         var proposalResponse = await ownerClient.PostAsJsonAsync("/api/capital/goals", new { newAmount = 900000m });
         var proposal = await proposalResponse.Content.ReadFromJsonAsync<GoalResponse>();
         Assert.NotNull(proposal);
-        var proposalId = proposal!.ProposalId;
+        var proposalId = proposal!.Id;
 
         var withdrawal = await ownerClient.PostAsync($"/api/capital/goals/{proposalId}/withdraw", null);
         Assert.Equal(HttpStatusCode.NoContent, withdrawal.StatusCode);
@@ -120,5 +129,19 @@ public sealed class FundGoalGovernanceTests
         return client;
     }
 
-    private sealed record GoalResponse(long ProposalId, string Status, decimal NewAmount, IReadOnlyList<Guid> Electorate, IReadOnlyList<Guid> Approvals);
+    private sealed record GoalResponse(
+        long Id,
+        string Status,
+        decimal NewAmount,
+        IReadOnlyList<Guid> Approvals,
+        Guid ProposedBy,
+        IReadOnlyList<SignatureResponse> Signatures);
+
+    private sealed record SignatureResponse(Guid MemberId, string Name, string Role, bool Signed);
+
+    private sealed record CapitalResponse(GovernanceResponse Governance);
+
+    private sealed record GovernanceResponse(
+        IReadOnlyList<JsonElement> Members,
+        IReadOnlyList<JsonElement> RequiredMembers);
 }

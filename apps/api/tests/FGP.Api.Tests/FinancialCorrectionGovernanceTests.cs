@@ -30,7 +30,11 @@ public sealed class FinancialCorrectionGovernanceTests
             contributionDate = "2026-07-26",
         });
         Assert.Equal(HttpStatusCode.Created, contributionResponse.StatusCode);
-        var contributionId = (await contributionResponse.Content.ReadFromJsonAsync<IdResponse>())!.Id;
+        var contribution = await contributionResponse.Content.ReadFromJsonAsync<ContributionResponse>();
+        Assert.NotNull(contribution);
+        Assert.Equal("analyst", contribution!.MemberName);
+        Assert.Equal(1000m, contribution.Amount);
+        var contributionId = contribution.Id;
 
         var treasurerClient = await SignInMemberAsync(app, "treasurer@example.test");
         var proposalResponse = await treasurerClient.PostAsJsonAsync("/api/capital/corrections", new
@@ -40,7 +44,20 @@ public sealed class FinancialCorrectionGovernanceTests
             proposedAmount = 1250m,
         });
         Assert.Equal(HttpStatusCode.Created, proposalResponse.StatusCode);
-        var proposalId = (await proposalResponse.Content.ReadFromJsonAsync<IdResponse>())!.Id;
+        var proposal = await proposalResponse.Content.ReadFromJsonAsync<CorrectionResponse>();
+        Assert.NotNull(proposal);
+        Assert.Equal("edit", proposal!.Action);
+        Assert.Equal(1250m, proposal.ProposedAmount);
+        Assert.False(proposal.Approved);
+        Assert.Equal(CapitalFundStatuses.Open, proposal.Status);
+        Assert.Equal(2, proposal.Signatures.Count);
+        var proposalId = proposal.Id;
+
+        var capital = await ownerClient.GetFromJsonAsync<CapitalResponse>("/api/capital/");
+        Assert.NotNull(capital);
+        var listedCorrection = capital!.Corrections.Single(item => item.Id == proposalId);
+        Assert.Empty(listedCorrection.Approvals);
+        Assert.Equal(2, listedCorrection.Signatures.Count);
 
         var analystClient = await SignInMemberAsync(app, "analyst@example.test");
         Assert.Equal(HttpStatusCode.Forbidden, (await analystClient.PostAsync($"/api/capital/corrections/{proposalId}/approvals", null)).StatusCode);
@@ -49,6 +66,11 @@ public sealed class FinancialCorrectionGovernanceTests
         var chairClient = await SignInMemberAsync(app, "chair@example.test");
         var approval = await chairClient.PostAsync($"/api/capital/corrections/{proposalId}/approvals", null);
         Assert.Equal(HttpStatusCode.OK, approval.StatusCode);
+        var approved = await approval.Content.ReadFromJsonAsync<CorrectionResponse>();
+        Assert.NotNull(approved);
+        Assert.True(approved!.Approved);
+        Assert.Equal(CapitalFundStatuses.Applied, approved.Status);
+        Assert.Single(approved.Approvals);
 
         await using var scope = app.Services.CreateAsyncScope();
         var database = scope.ServiceProvider.GetRequiredService<FgpDbContext>();
@@ -156,4 +178,28 @@ public sealed class FinancialCorrectionGovernanceTests
     }
 
     private sealed record IdResponse(long Id);
+
+    private sealed record ContributionResponse(
+        long Id,
+        string MemberName,
+        DateOnly ContributionDate,
+        decimal Amount,
+        string? Note);
+
+    private sealed record CorrectionResponse(
+        long Id,
+        long ContributionId,
+        string Action,
+        IReadOnlyList<Guid> Approvals,
+        Guid ProposedBy,
+        Guid ProposedByMemberId,
+        decimal? ProposedAmount,
+        string? ProposedNote,
+        bool Approved,
+        string Status,
+        IReadOnlyList<SignatureResponse> Signatures);
+
+    private sealed record SignatureResponse(Guid MemberId, string Name, string Role, bool Signed);
+
+    private sealed record CapitalResponse(IReadOnlyList<CorrectionResponse> Corrections);
 }

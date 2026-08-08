@@ -70,7 +70,43 @@ public static class CapitalFundEndpoints
             var signatures = await database.Memberships.Where(item => electorate.Contains(item.Id)).Join(database.Users, member => member.UserId, user => user.Id, (member, user) => new { memberId = member.Id, name = user.DisplayName ?? user.Email ?? "Member", role = member.Role.ToString(), signed = approvals.Contains(member.Id) }).ToListAsync(cancellationToken);
             goalResponse = new { id = proposal.Id, newAmount = proposal.NewAmount, approvals, proposedBy = proposal.ProposedByMembershipId, signatures };
         }
-        var openCorrections = await database.CapitalCorrectionProposals.AsNoTracking().Where(item => item.OrganizationId == organizationId && item.Status == CapitalFundStatuses.Open).ToListAsync(cancellationToken);
+        var openCorrections = await database.CapitalCorrectionProposals
+            .AsNoTracking()
+            .Where(item => item.OrganizationId == organizationId && item.Status == CapitalFundStatuses.Open)
+            .ToListAsync(cancellationToken);
+        var correctionIds = openCorrections.Select(item => item.Id).ToList();
+        var correctionApprovals = await database.CapitalCorrectionApprovals
+            .AsNoTracking()
+            .Where(item => correctionIds.Contains(item.ProposalId))
+            .GroupBy(item => item.ProposalId)
+            .Select(group => new { ProposalId = group.Key, Approvers = group.Select(item => item.ApproverMembershipId).ToList() })
+            .ToDictionaryAsync(item => item.ProposalId, item => (IReadOnlyList<Guid>)item.Approvers, cancellationToken);
+        var correctionSignatories = await database.Memberships
+            .AsNoTracking()
+            .Where(member =>
+                member.OrganizationId == organizationId &&
+                member.Status == MembershipStatus.Active &&
+                (member.Role == OrganizationRole.Owner || member.Role == OrganizationRole.Chairperson))
+            .Join(database.Users, member => member.UserId, user => user.Id, (member, user) => new { member.Id, Name = user.DisplayName ?? user.Email ?? "Member", member.Role })
+            .ToListAsync(cancellationToken);
+        var corrections = openCorrections.Select(item =>
+        {
+            var approvals = correctionApprovals.GetValueOrDefault(item.Id, []);
+            return new
+            {
+                item.Id,
+                item.ContributionId,
+                item.Action,
+                approvals,
+                proposedBy = item.ProposedByMembershipId,
+                proposedByMemberId = item.ProposedByMembershipId,
+                item.ProposedAmount,
+                item.ProposedNote,
+                approved = item.Status == CapitalFundStatuses.Applied,
+                item.Status,
+                signatures = correctionSignatories.Select(member => new { memberId = member.Id, name = member.Name, role = member.Role.ToString(), signed = approvals.Contains(member.Id) }),
+            };
+        }).ToList();
         var activeMembers = await database.Memberships
             .AsNoTracking()
             .Where(member => member.OrganizationId == organizationId && member.Status == MembershipStatus.Active)
@@ -95,7 +131,7 @@ public static class CapitalFundEndpoints
             .ThenBy(member => member.name, StringComparer.Ordinal)
             .Select(member => new { member.memberId, member.name, role = member.role.ToString(), member.status })
             .ToList();
-        return Results.Ok(new { contributions, goal, goalProposal = goalResponse, corrections = openCorrections, governance = new { requiredMembers, members } });
+        return Results.Ok(new { contributions, goal, goalProposal = goalResponse, corrections, governance = new { requiredMembers, members } });
     }
 
     private static async Task<IResult> LegacyCapitalActionAsync(
@@ -117,9 +153,10 @@ public static class CapitalFundEndpoints
                     return Results.Json(new { id = contribution.Id, memberName = context.User.Identity?.Name ?? "Member", contributionDate = contribution.ContributionDate, amount = contribution.Amount, note = contribution.Note }, statusCode: StatusCodes.Status201Created);
                 case "goal":
                     var goal = await governance.ProposeFundGoalAsync(organizationId, userId, request.NewAmount ?? 0, cancellationToken);
-                    return Results.Json(await LegacyGoalResponseAsync(database, goal.ProposalId, cancellationToken), statusCode: StatusCodes.Status201Created);
+                    return Results.Json(await BuildGoalResponseAsync(database, goal.ProposalId, cancellationToken), statusCode: StatusCodes.Status201Created);
                 case "approve-goal":
-                    return Results.Ok(await LegacyGoalResponseAsync(database, (request.ProposalId ?? 0), cancellationToken, governance, organizationId, userId));
+                    await governance.ApproveFundGoalAsync(organizationId, userId, request.ProposalId ?? 0, cancellationToken);
+                    return Results.Ok(await BuildGoalResponseAsync(database, request.ProposalId ?? 0, cancellationToken));
                 case "correction":
                     var correction = await governance.ProposeCorrectionAsync(organizationId, userId, new ProposeCorrectionCommand(request.ContributionId ?? 0, request.CorrectionAction ?? "edit", request.Amount, request.ProposedNote), cancellationToken);
                     return Results.Json(new { id = correction.Id, contributionId = correction.ContributionId, action = correction.Action, approvals = Array.Empty<Guid>(), proposedBy = actor.Id, proposedByMemberId = actor.Id, proposedAmount = correction.ProposedAmount, signatures = Array.Empty<object>() }, statusCode: StatusCodes.Status201Created);
@@ -133,19 +170,61 @@ public static class CapitalFundEndpoints
         catch (GovernanceError error) { return Error(error); }
     }
 
-    private static async Task<object> LegacyGoalResponseAsync(FgpDbContext database, long proposalId, CancellationToken cancellationToken, GovernanceService? governance = null, Guid organizationId = default, Guid userId = default)
+    private static async Task<object> BuildGoalResponseAsync(FgpDbContext database, long proposalId, CancellationToken cancellationToken)
     {
-        if (governance is not null) await governance.ApproveFundGoalAsync(organizationId, userId, proposalId, cancellationToken);
         var proposal = await database.CapitalGoalProposals.AsNoTracking().SingleAsync(item => item.Id == proposalId, cancellationToken);
         var electorate = await database.CapitalGoalElectorates.Where(item => item.ProposalId == proposalId).Select(item => item.MembershipId).ToListAsync(cancellationToken);
         var approvals = await database.CapitalGoalApprovals.Where(item => item.ProposalId == proposalId).Select(item => item.MembershipId).ToListAsync(cancellationToken);
-        return new { id = proposal.Id, newAmount = proposal.NewAmount, approved = proposal.Status == CapitalFundStatuses.Applied, status = proposal.Status, approvals, proposedBy = proposal.ProposedByMembershipId, signatures = electorate.Select(id => new { memberId = id, signed = approvals.Contains(id) }).ToArray() };
+        var signatures = await database.Memberships
+            .AsNoTracking()
+            .Where(member => electorate.Contains(member.Id))
+            .Join(database.Users, member => member.UserId, user => user.Id, (member, user) => new { member.Id, Name = user.DisplayName ?? user.Email ?? "Member", member.Role, Signed = approvals.Contains(member.Id) })
+            .ToListAsync(cancellationToken);
+        return new
+        {
+            id = proposal.Id,
+            newAmount = proposal.NewAmount,
+            approved = proposal.Status == CapitalFundStatuses.Applied,
+            status = proposal.Status,
+            approvals,
+            proposedBy = proposal.ProposedByMembershipId,
+            signatures = signatures.Select(member => new { memberId = member.Id, name = member.Name, role = member.Role.ToString(), signed = member.Signed }),
+        };
+    }
+
+    private static async Task<object> BuildCorrectionResponseAsync(FgpDbContext database, long proposalId, CancellationToken cancellationToken)
+    {
+        var proposal = await database.CapitalCorrectionProposals.AsNoTracking().SingleAsync(item => item.Id == proposalId, cancellationToken);
+        var approvals = await database.CapitalCorrectionApprovals.Where(item => item.ProposalId == proposalId).Select(item => item.ApproverMembershipId).ToListAsync(cancellationToken);
+        var signatures = await database.Memberships
+            .AsNoTracking()
+            .Where(member =>
+                member.OrganizationId == proposal.OrganizationId &&
+                member.Status == MembershipStatus.Active &&
+                (member.Role == OrganizationRole.Owner || member.Role == OrganizationRole.Chairperson))
+            .Join(database.Users, member => member.UserId, user => user.Id, (member, user) => new { member.Id, Name = user.DisplayName ?? user.Email ?? "Member", member.Role, Signed = approvals.Contains(member.Id) })
+            .ToListAsync(cancellationToken);
+        return new
+        {
+            id = proposal.Id,
+            contributionId = proposal.ContributionId,
+            action = proposal.Action,
+            approvals,
+            proposedBy = proposal.ProposedByMembershipId,
+            proposedByMemberId = proposal.ProposedByMembershipId,
+            proposedAmount = proposal.ProposedAmount,
+            proposedNote = proposal.ProposedNote,
+            approved = proposal.Status == CapitalFundStatuses.Applied,
+            status = proposal.Status,
+            signatures = signatures.Select(member => new { memberId = member.Id, name = member.Name, role = member.Role.ToString(), signed = member.Signed }),
+        };
     }
 
     private static async Task<IResult> RecordContributionAsync(
         RecordContributionRequest request,
         HttpContext context,
         GovernanceService governance,
+        FgpDbContext database,
         CancellationToken cancellationToken)
     {
         if (!TryGetActor(context.User, out var userId, out var organizationId)) return Results.Unauthorized();
@@ -156,7 +235,19 @@ public static class CapitalFundEndpoints
                 userId,
                 new RecordContributionCommand(request.MemberId, request.Amount, request.ContributionDate, request.Note),
                 cancellationToken);
-            return Results.Created($"/api/capital/contributions/{contribution.Id}", new { contribution.Id });
+            var memberName = await database.Memberships
+                .AsNoTracking()
+                .Where(member => member.Id == contribution.MemberId)
+                .Join(database.Users, member => member.UserId, user => user.Id, (member, user) => user.DisplayName ?? user.Email ?? "Member")
+                .SingleOrDefaultAsync(cancellationToken) ?? "Member";
+            return Results.Created($"/api/capital/contributions/{contribution.Id}", new
+            {
+                id = contribution.Id,
+                memberName,
+                contributionDate = contribution.ContributionDate,
+                amount = contribution.Amount,
+                note = contribution.Note,
+            });
         }
         catch (GovernanceError error)
         {
@@ -168,13 +259,14 @@ public static class CapitalFundEndpoints
         ProposeGoalRequest request,
         HttpContext context,
         GovernanceService governance,
+        FgpDbContext database,
         CancellationToken cancellationToken)
     {
         if (!TryGetActor(context.User, out var userId, out var organizationId)) return Results.Unauthorized();
         try
         {
             var proposal = await governance.ProposeFundGoalAsync(organizationId, userId, request.NewAmount, cancellationToken);
-            return Results.Created($"/api/capital/goals/{proposal.ProposalId}", proposal);
+            return Results.Created($"/api/capital/goals/{proposal.ProposalId}", await BuildGoalResponseAsync(database, proposal.ProposalId, cancellationToken));
         }
         catch (GovernanceError error)
         {
@@ -186,12 +278,14 @@ public static class CapitalFundEndpoints
         long id,
         HttpContext context,
         GovernanceService governance,
+        FgpDbContext database,
         CancellationToken cancellationToken)
     {
         if (!TryGetActor(context.User, out var userId, out var organizationId)) return Results.Unauthorized();
         try
         {
-            return Results.Ok(await governance.ApproveFundGoalAsync(organizationId, userId, id, cancellationToken));
+            await governance.ApproveFundGoalAsync(organizationId, userId, id, cancellationToken);
+            return Results.Ok(await BuildGoalResponseAsync(database, id, cancellationToken));
         }
         catch (GovernanceError error)
         {
@@ -221,6 +315,7 @@ public static class CapitalFundEndpoints
         ProposeCorrectionRequest request,
         HttpContext context,
         GovernanceService governance,
+        FgpDbContext database,
         CancellationToken cancellationToken)
     {
         if (!TryGetActor(context.User, out var userId, out var organizationId)) return Results.Unauthorized();
@@ -231,7 +326,7 @@ public static class CapitalFundEndpoints
                 userId,
                 new ProposeCorrectionCommand(request.ContributionId, request.Action, request.ProposedAmount, request.ProposedNote),
                 cancellationToken);
-            return Results.Created($"/api/capital/corrections/{proposal.Id}", new { proposal.Id });
+            return Results.Created($"/api/capital/corrections/{proposal.Id}", await BuildCorrectionResponseAsync(database, proposal.Id, cancellationToken));
         }
         catch (GovernanceError error)
         {
@@ -243,12 +338,14 @@ public static class CapitalFundEndpoints
         long id,
         HttpContext context,
         GovernanceService governance,
+        FgpDbContext database,
         CancellationToken cancellationToken)
     {
         if (!TryGetActor(context.User, out var userId, out var organizationId)) return Results.Unauthorized();
         try
         {
-            return Results.Ok(await governance.ApproveCorrectionAsync(organizationId, userId, id, cancellationToken));
+            await governance.ApproveCorrectionAsync(organizationId, userId, id, cancellationToken);
+            return Results.Ok(await BuildCorrectionResponseAsync(database, id, cancellationToken));
         }
         catch (GovernanceError error)
         {
