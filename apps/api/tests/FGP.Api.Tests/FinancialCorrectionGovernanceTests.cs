@@ -90,6 +90,58 @@ public sealed class FinancialCorrectionGovernanceTests
     }
 
     [Fact]
+    public async Task Legacy_capital_actions_return_the_enriched_correction_contract()
+    {
+        await using var app = await IdentityApiFactory.CreateAsync();
+        var ownerClient = app.CreateClient();
+        var owner = await ContractTestSession.RegisterConfirmAndSignInAsync(ownerClient, app);
+        await AddMemberAsync(app, owner.OrganizationId, "chair@example.test", OrganizationRole.Chairperson);
+        var treasurer = await AddMemberAsync(app, owner.OrganizationId, "treasurer@example.test", OrganizationRole.Treasurer);
+        var analyst = await AddMemberAsync(app, owner.OrganizationId, "analyst@example.test", OrganizationRole.Analyst);
+
+        var contributionResponse = await ownerClient.PostAsJsonAsync("/api/capital/contributions", new
+        {
+            memberId = analyst.Id,
+            amount = 1000m,
+            contributionDate = "2026-07-26",
+        });
+        var contributionId = (await contributionResponse.Content.ReadFromJsonAsync<IdResponse>())!.Id;
+
+        var treasurerClient = await SignInMemberAsync(app, "treasurer@example.test");
+        var proposalResponse = await treasurerClient.PostAsJsonAsync("/api/capital", new
+        {
+            action = "correction",
+            contributionId,
+            correctionAction = "edit",
+            amount = 1250m,
+            proposedNote = "legacy probe",
+        });
+        Assert.Equal(HttpStatusCode.Created, proposalResponse.StatusCode);
+        var proposal = await proposalResponse.Content.ReadFromJsonAsync<CorrectionResponse>();
+        Assert.NotNull(proposal);
+        Assert.Equal(1250m, proposal!.ProposedAmount);
+        Assert.Equal("legacy probe", proposal.ProposedNote);
+        Assert.Empty(proposal.Approvals);
+        Assert.Equal(2, proposal.Signatures.Count);
+
+        var chairClient = await SignInMemberAsync(app, "chair@example.test");
+        var approval = await chairClient.PostAsJsonAsync("/api/capital", new
+        {
+            action = "approve-correction",
+            proposalId = proposal.Id,
+        });
+        Assert.Equal(HttpStatusCode.OK, approval.StatusCode);
+        var approved = await approval.Content.ReadFromJsonAsync<CorrectionResponse>();
+        Assert.NotNull(approved);
+        Assert.True(approved!.Approved);
+        Assert.Equal(CapitalFundStatuses.Applied, approved.Status);
+        Assert.Equal(1250m, approved.ProposedAmount);
+        Assert.Equal("legacy probe", approved.ProposedNote);
+        Assert.Single(approved.Approvals);
+        Assert.Equal(2, approved.Signatures.Count);
+    }
+
+    [Fact]
     public async Task Owner_subject_cannot_approve_own_subject_correction_but_chairperson_can()
     {
         await using var app = await IdentityApiFactory.CreateAsync();

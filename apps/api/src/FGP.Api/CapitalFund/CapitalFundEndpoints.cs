@@ -159,10 +159,10 @@ public static class CapitalFundEndpoints
                     return Results.Ok(await BuildGoalResponseAsync(database, request.ProposalId ?? 0, cancellationToken));
                 case "correction":
                     var correction = await governance.ProposeCorrectionAsync(organizationId, userId, new ProposeCorrectionCommand(request.ContributionId ?? 0, request.CorrectionAction ?? "edit", request.Amount, request.ProposedNote), cancellationToken);
-                    return Results.Json(new { id = correction.Id, contributionId = correction.ContributionId, action = correction.Action, approvals = Array.Empty<Guid>(), proposedBy = actor.Id, proposedByMemberId = actor.Id, proposedAmount = correction.ProposedAmount, signatures = Array.Empty<object>() }, statusCode: StatusCodes.Status201Created);
+                    return Results.Json(await BuildCorrectionResponseAsync(database, correction.Id, cancellationToken), statusCode: StatusCodes.Status201Created);
                 case "approve-correction":
-                    var approved = await governance.ApproveCorrectionAsync(organizationId, userId, request.ProposalId ?? 0, cancellationToken);
-                    return Results.Ok(new { approved = approved.Changed, proposalId = approved.ProposalId });
+                    await governance.ApproveCorrectionAsync(organizationId, userId, request.ProposalId ?? 0, cancellationToken);
+                    return Results.Ok(await BuildCorrectionResponseAsync(database, request.ProposalId ?? 0, cancellationToken));
                 default:
                     return Results.BadRequest(new { error = "unknown action" });
             }

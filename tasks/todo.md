@@ -214,6 +214,9 @@ cannot consume directly.
       proposedAmount/proposedNote/signatures`.
 - [x] `GET /api/capital` corrections use the same contract (approvals/signatures/
       proposedByMemberId) so the pending-corrections UI cannot hit undefined shapes.
+- [x] Wire the legacy multiplexer's `correction`/`approve-correction` actions through
+      the same builder (page still uses that path until #11) and add a regression test
+      that drives the legacy actions with the page's payloads.
 - [x] Update focused governance tests to the enriched shapes and pin the populated
       governance payload.
 - [x] Run focused API tests, then the full verification matrix, restart the API, and
